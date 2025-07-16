@@ -15,7 +15,9 @@ export const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Company Info */}
           <div>
-            <h3 className="text-xl font-bold text-primary mb-4">Trophy Tale</h3>
+            <h3 className="text-xl font-bold text-primary mb-4">
+              Shrifal-Handicrafts
+            </h3>
             <p className="text-gray-300 mb-4">
               Creating beautiful, customized trophies, mementos, and gifts that
               celebrate your special moments.
@@ -111,18 +113,18 @@ export const Footer = () => {
             <div className="space-y-3">
               <div className="flex items-center text-gray-300">
                 <Phone className="h-4 w-4 mr-2" />
-                <span>+1 (555) 123-4567</span>
+                <span>(+91) 9424626008</span>
               </div>
               <div className="flex items-center text-gray-300">
                 <Mail className="h-4 w-4 mr-2" />
-                <span>info@trophytale.com</span>
+                <span>910761ranu@gmail.com</span>
               </div>
               <div className="flex items-start text-gray-300">
                 <MapPin className="h-4 w-4 mr-2 mt-1" />
                 <span>
-                  123 Creative Street
+                  Main Road, Kachiyana, Lordganj
                   <br />
-                  Artisan District, NY 10001
+                  Jabalpur, Madhya Pradesh
                 </span>
               </div>
             </div>
@@ -130,7 +132,7 @@ export const Footer = () => {
         </div>
 
         <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-          <p>&copy; 2024 Trophy Tale. All rights reserved.</p>
+          <p>&copy; 2024 Shrifal-Handicrafts. All rights reserved.</p>
         </div>
       </div>
     </footer>

@@ -63,16 +63,29 @@ export const Hero = () => {
                 <div className="bg-white rounded-2xl p-6 shadow-lg">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-100 rounded-lg p-4 aspect-square flex items-center justify-center">
-                      <Award className="h-8 w-8 text-primary" />
+                      <img
+                        src="/mandir/Ram-mandir.png"
+                        class="shadow-lg rounded-lg w-64 h-auto"
+                      ></img>
+                      {/* <Award /> */}
                     </div>
                     <div className="bg-gray-100 rounded-lg p-4 aspect-square flex items-center justify-center">
-                      <div className="w-8 h-8 bg-primary rounded-full"></div>
+                      <img
+                        src="/trophy/trophy-1.png"
+                        class="shadow-lg rounded-lg w-64 h-auto"
+                      ></img>
                     </div>
                     <div className="bg-gray-100 rounded-lg p-4 aspect-square flex items-center justify-center">
-                      <div className="w-8 h-6 bg-gradient-to-r from-primary to-yellow-500 rounded"></div>
+                      <img
+                        src="/trophy/trophy-2.png"
+                        class="shadow-lg rounded-lg w-64 h-auto"
+                      ></img>
                     </div>
                     <div className="bg-gray-100 rounded-lg p-4 aspect-square flex items-center justify-center">
-                      <Heart className="h-8 w-8 text-primary" />
+                      <img
+                        src="/org-customization/org-1.png"
+                        class="shadow-lg rounded-lg w-64 h-auto"
+                      ></img>
                     </div>
                   </div>
                 </div>
