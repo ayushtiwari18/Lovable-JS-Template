@@ -1,51 +1,74 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
 
 const AuthContext = createContext(undefined);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Load user from localStorage on mount
+  // On component mount, fetch session
   useEffect(() => {
-    const savedUser = localStorage.getItem("user");
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    const getSession = async () => {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+      if (error) {
+        console.error("Session error:", error.message);
+      }
+      setUser(session?.user ?? null);
+      setLoading(false);
+    };
+
+    getSession();
+
+    // Listen to auth changes (login, logout)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email, password) => {
-    // Mock authentication - replace with real auth later
-    if (email && password) {
-      const mockUser = {
-        id: "1",
-        email,
-        name: email.split("@")[0],
-      };
-      setUser(mockUser);
-      localStorage.setItem("user", JSON.stringify(mockUser));
-      return true;
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      return { error: error.message };
     }
-    return false;
+
+    setUser(data.user);
+    return { user: data.user };
   };
 
   const register = async (email, password, name) => {
-    // Mock registration - replace with real auth later
-    if (email && password && name) {
-      const mockUser = {
-        id: Math.random().toString(36).substr(2, 9),
-        email,
-        name,
-      };
-      setUser(mockUser);
-      localStorage.setItem("user", JSON.stringify(mockUser));
-      return true;
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name }, // ✅ this saves name in user_metadata
+      },
+    });
+
+    if (error) {
+      return { error: error.message };
     }
-    return false;
+
+    console.log("User registered:", data.user);
+
+    return { user: data.user };
   };
 
-  const logout = () => {
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem("user");
   };
 
   return (
@@ -55,10 +78,11 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
+        loading,
         isAuthenticated: !!user,
       }}
     >
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

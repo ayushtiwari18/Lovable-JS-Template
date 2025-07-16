@@ -14,6 +14,7 @@ const Login = () => {
   const { toast } = useToast();
 
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -28,10 +29,13 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    const success = await login(formData.email, formData.password);
+    const { user, error } = await login(formData.email, formData.password);
 
-    if (success) {
+    setIsSubmitting(false);
+
+    if (user) {
       toast({
         title: "Welcome back!",
         description: "You have been successfully logged in.",
@@ -40,7 +44,7 @@ const Login = () => {
     } else {
       toast({
         title: "Login Failed",
-        description: "Please check your credentials and try again.",
+        description: error || "Please check your credentials and try again.",
         variant: "destructive",
       });
     }
@@ -101,8 +105,8 @@ const Login = () => {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full">
-                Sign In
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? "Signing in..." : "Sign In"}
               </Button>
             </form>
 

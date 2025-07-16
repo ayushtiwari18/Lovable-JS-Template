@@ -15,6 +15,7 @@ const Register = () => {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -42,10 +43,13 @@ const Register = () => {
       return;
     }
 
-    const fullName = `${formData.firstName} ${formData.lastName}`;
-    const success = await register(formData.email, formData.password, fullName);
+    setIsSubmitting(true);
 
-    if (success) {
+    const { user, error } = await register(formData.email, formData.password);
+
+    setIsSubmitting(false);
+
+    if (user) {
       toast({
         title: "Account Created!",
         description:
@@ -55,7 +59,7 @@ const Register = () => {
     } else {
       toast({
         title: "Registration Failed",
-        description: "Please check your information and try again.",
+        description: error || "Please check your information and try again.",
         variant: "destructive",
       });
     }
@@ -169,8 +173,8 @@ const Register = () => {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full">
-                Create Account
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? "Creating Account..." : "Create Account"}
               </Button>
             </form>
 
