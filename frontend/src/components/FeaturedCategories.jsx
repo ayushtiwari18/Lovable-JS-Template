@@ -8,7 +8,7 @@ const categories = [
     name: "Trophies",
     description: "Championship trophies, awards, and recognition pieces",
     icon: Award,
-    image: "/placeholder.svg",
+    image: "/trophy/trophy-1.png",
     count: "50+ designs",
   },
   {
@@ -16,7 +16,7 @@ const categories = [
     name: "Photo Frames",
     description: "Custom photo frames for your precious memories",
     icon: Image,
-    image: "/placeholder.svg",
+    image: "/photo-frames/PF-1.png",
     count: "30+ styles",
   },
   {
@@ -24,7 +24,7 @@ const categories = [
     name: "Key Holders",
     description: "Personalized key holders for home and office",
     icon: Key,
-    image: "/placeholder.svg",
+    image: "/key_holders/KH1.png",
     count: "25+ designs",
   },
   {
@@ -32,7 +32,7 @@ const categories = [
     name: "Calendars",
     description: "Custom calendars with your favorite photos",
     icon: Calendar,
-    image: "/placeholder.svg",
+    image: "/mandir/Ram-mandir.png",
     count: "15+ templates",
   },
 ];
@@ -59,9 +59,18 @@ export const FeaturedCategories = () => {
                 key={category.id}
                 className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden hover-scale"
               >
-                <div className="aspect-square bg-gradient-to-br from-primary/10 to-yellow-100 p-8 flex items-center justify-center">
-                  <IconComponent className="h-16 w-16 text-primary group-hover:scale-110 transition-transform duration-300" />
+                <div className="aspect-square bg-gradient-to-br from-primary/10 to-yellow-100 border-2 border-yellow-700 rounded-xl overflow-hidden flex items-center justify-center">
+                  {category.image ? (
+                    <img
+                      src={category.image}
+                      alt={category.name}
+                      className="w-full h-full object-cover rounded-xl"
+                    />
+                  ) : (
+                    <IconComponent className="h-16 w-16 text-primary group-hover:scale-110 transition-transform duration-300" />
+                  )}
                 </div>
+
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-xl font-semibold text-gray-900">

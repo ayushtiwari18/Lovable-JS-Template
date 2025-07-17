@@ -7,6 +7,29 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+
+// You can replace this with a real Spinner component
+const Spinner = () => (
+  <div className="flex items-center justify-center">
+    <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+        fill="none"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+      />
+    </svg>
+  </div>
+);
 
 const Login = () => {
   const navigate = useNavigate();
@@ -36,11 +59,33 @@ const Login = () => {
     setIsSubmitting(false);
 
     if (user) {
-      toast({
-        title: "Welcome back!",
-        description: "You have been successfully logged in.",
-      });
-      navigate("/");
+      // Optional: double-check session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        toast({
+          title: "Welcome back!",
+          description: "You have been successfully logged in.",
+        });
+
+        // Optional: fetch customer profile if needed
+        // const { data: customer } = await supabase
+        //   .from("customers")
+        //   .select("*")
+        //   .eq("id", user.id)
+        //   .single();
+        // console.log("Customer Profile:", customer);
+
+        navigate("/");
+      } else {
+        toast({
+          title: "Login Issue",
+          description: "Unable to establish session. Try again.",
+          variant: "destructive",
+        });
+      }
     } else {
       toast({
         title: "Login Failed",
@@ -59,9 +104,7 @@ const Login = () => {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
                 Welcome Back
               </h1>
-              <p className="text-gray-600">
-                Sign in to your Trophy Tale account
-              </p>
+              <p className="text-gray-600">Sign in to your account</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -105,14 +148,23 @@ const Login = () => {
                 </div>
               </div>
 
+              <div className="text-right text-sm">
+                <Link
+                  to="/forgot-password"
+                  className="text-blue-500 hover:underline"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
+
               <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Signing in..." : "Sign In"}
+                {isSubmitting ? <Spinner /> : "Sign In"}
               </Button>
             </form>
 
             <div className="mt-6 text-center">
               <p className="text-gray-600">
-                Don't have an account?{" "}
+                Don&apos;t have an account?{" "}
                 <Link
                   to="/register"
                   className="text-primary hover:underline font-medium"

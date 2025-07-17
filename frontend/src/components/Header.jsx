@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 import {
   ShoppingCart,
   User,
@@ -30,9 +31,14 @@ export const Header = () => {
   const { getTotalItems } = useCart();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const handleLogout = () => {
     logout();
+    toast({
+      title: "Logged Out",
+      description: "You have been successfully logged out.",
+    });
     navigate("/");
   };
 
@@ -49,6 +55,7 @@ export const Header = () => {
   };
 
   const getUserInitials = (name) => {
+<<<<<<< HEAD
     if (!name) return "U"; // fallback if name is undefined
     return name
       .split(" ")
@@ -56,6 +63,11 @@ export const Header = () => {
       .join("")
       .toUpperCase()
       .slice(0, 2);
+=======
+    if (!name || typeof name !== "string") return "👤";
+    const [first, last] = name.trim().split(" ");
+    return (first[0] + (last ? last[0] : "")).toUpperCase();
+>>>>>>> 71c6f6407586820372c4e9ca5e0a8cf3b567db6c
   };
 
   return (
