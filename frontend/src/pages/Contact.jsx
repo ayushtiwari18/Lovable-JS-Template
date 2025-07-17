@@ -1,43 +1,43 @@
-import { useState } from "react"
-import { Layout } from "@/components/Layout"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/hooks/use-toast"
-import { Mail, Phone, MapPin, Clock } from "lucide-react"
+import { useState } from "react";
+import { Layout } from "@/components/Layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { Mail, Phone, MapPin, Clock } from "lucide-react";
 
 const Contact = () => {
-  const { toast } = useToast()
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
     subject: "",
-    message: ""
-  })
+    message: "",
+  });
 
-  const handleSubmit = e => {
-    e.preventDefault()
+  const handleSubmit = (e) => {
+    e.preventDefault();
     toast({
       title: "Message Sent!",
-      description: "Thank you for contacting us. We'll get back to you soon."
-    })
+      description: "Thank you for contacting us. We'll get back to you soon.",
+    });
     setFormData({
       name: "",
       email: "",
       phone: "",
       subject: "",
-      message: ""
-    })
-  }
+      message: "",
+    });
+  };
 
-  const handleChange = e => {
+  const handleChange = (e) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
-    })
-  }
+      [e.target.name]: e.target.value,
+    });
+  };
 
   return (
     <Layout>
@@ -72,8 +72,10 @@ const Contact = () => {
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-1">Phone</h3>
-                    <p className="text-gray-600">+1 (555) 123-4567</p>
-                    <p className="text-sm text-gray-500">Mon-Fri 9am-6pm EST</p>
+                    <p className="text-gray-600">(+91) 9424626008</p>
+                    <p className="text-sm text-gray-500">
+                      Mon-Sat 10am-8pm IST
+                    </p>
                   </div>
                 </div>
 
@@ -83,7 +85,7 @@ const Contact = () => {
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-1">Email</h3>
-                    <p className="text-gray-600">info@trophytale.com</p>
+                    <p className="text-gray-600">910761ranu@gmail.com</p>
                     <p className="text-sm text-gray-500">
                       We'll respond within 24 hours
                     </p>
@@ -99,9 +101,9 @@ const Contact = () => {
                       Address
                     </h3>
                     <p className="text-gray-600">
-                      123 Creative Street
+                      Main Road, Kachiyana, Lordganj
                       <br />
-                      Artisan District, NY 10001
+                      Jabalpur, Madhya Pradesh
                     </p>
                   </div>
                 </div>
@@ -115,8 +117,7 @@ const Contact = () => {
                       Business Hours
                     </h3>
                     <div className="text-gray-600 space-y-1">
-                      <p>Monday - Friday: 9:00 AM - 6:00 PM</p>
-                      <p>Saturday: 10:00 AM - 4:00 PM</p>
+                      <p>Monday - Saturday: 10:00 AM - 8:00 PM</p>
                       <p>Sunday: Closed</p>
                     </div>
                   </div>
@@ -283,7 +284,7 @@ const Contact = () => {
         </div>
       </section>
     </Layout>
-  )
-}
+  );
+};
 
-export default Contact
+export default Contact;
