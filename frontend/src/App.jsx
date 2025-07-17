@@ -51,7 +51,7 @@ const App = () => (
                 <Route path="/favourites" element={<Favourites />} />
                 <Route path="/my-orders" element={<MyOrders />} />
                 <Route path="/order/:orderId" element={<OrderDetail />} />
-                <Route path="/personal-details" element={<PersonalDetails />} />
+                <Route path="/personal-details" element={<PersonalDetails />} /> 
                 <Route path="/terms-conditions" element={<TermsConditions />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="*" element={<NotFound />} />

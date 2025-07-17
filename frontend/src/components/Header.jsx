@@ -49,6 +49,7 @@ export const Header = () => {
   };
 
   const getUserInitials = (name) => {
+    if (!name) return "U"; // fallback if name is undefined
     return name
       .split(" ")
       .map((n) => n[0])

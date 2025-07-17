@@ -10,15 +10,24 @@ export const AuthProvider = ({ children }) => {
   // On component mount, fetch session
   useEffect(() => {
     const getSession = async () => {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
-      if (error) {
-        console.error("Session error:", error.message);
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error("Session error:", error.message);
+        } else {
+          console.log("Session retrieved:", session);
+        }
+
+        setUser(session?.user ?? null);
+      } catch (err) {
+        console.error("Error getting session:", err);
+      } finally {
+        setLoading(false);
       }
-      setUser(session?.user ?? null);
-      setLoading(false);
     };
 
     getSession();
@@ -26,49 +35,112 @@ export const AuthProvider = ({ children }) => {
     // Listen to auth changes (login, logout)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth state changed:", event, session);
       setUser(session?.user ?? null);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      console.log("Attempting login with email:", email);
 
-    if (error) {
-      return { error: error.message };
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) {
+        console.error("Login error:", error);
+        return { error: error.message };
+      }
+
+      console.log("Login successful:", data);
+      setUser(data.user);
+      return { user: data.user };
+    } catch (err) {
+      console.error("Login exception:", err);
+      return { error: "Login failed. Please try again." };
     }
-
-    setUser(data.user);
-    return { user: data.user };
   };
 
   const register = async (email, password, name) => {
-    const { data, error } = await supabase.auth.signUp({
+    console.log("Attempting registration with:", {
       email,
-      password,
-      options: {
-        data: { name }, // ✅ this saves name in user_metadata
-      },
+      password: "***",
+      name,
     });
 
-    if (error) {
-      return { error: error.message };
+    // Validate required fields
+    if (!email || !password) {
+      return { error: "Email and password are required" };
     }
 
-    console.log("User registered:", data.user);
+    if (password.length < 6) {
+      return { error: "Password must be at least 6 characters long" };
+    }
 
-    return { user: data.user };
+    try {
+      const signUpData = {
+        email: email.trim(),
+        password,
+      };
+
+      // Only add metadata if name is provided
+      if (name && name.trim() !== "") {
+        signUpData.options = {
+          data: {
+            name: name.trim(),
+            full_name: name.trim(),
+          },
+        };
+      }
+
+      console.log("Calling supabase.auth.signUp with:", {
+        email: signUpData.email,
+        password: "***",
+        options: signUpData.options,
+      });
+
+      const { data, error } = await supabase.auth.signUp(signUpData);
+
+      if (error) {
+        console.error("Signup error:", error);
+        return { error: error.message };
+      }
+
+      console.log("Signup response:", data);
+
+      // Check if email confirmation is required
+      if (data.user && !data.user.email_confirmed_at) {
+        console.log("Email confirmation required");
+        return {
+          user: data.user,
+          message: "Please check your email for confirmation link",
+        };
+      }
+
+      setUser(data.user);
+      return { user: data.user };
+    } catch (err) {
+      console.error("Registration exception:", err);
+      return { error: "Registration failed. Please try again." };
+    }
   };
 
-
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("Logout error:", error);
+      }
+      setUser(null);
+    } catch (err) {
+      console.error("Logout exception:", err);
+    }
   };
 
   return (
