@@ -24,6 +24,7 @@ import PersonalDetails from "./pages/PersonalDetails";
 import TermsConditions from "./pages/TermsConditions";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import NotFound from "./pages/NotFound";
+import VerifyPhone from "./pages/VerifyPhone";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/verify-phone" element={<VerifyPhone />} />
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/favourites" element={<Favourites />} />
                 <Route path="/my-orders" element={<MyOrders />} />

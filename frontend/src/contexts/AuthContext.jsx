@@ -24,13 +24,13 @@ export const AuthProvider = ({ children }) => {
     getSession();
 
     // Listen to auth changes (login, logout)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
 
-    return () => subscription.unsubscribe();
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   const login = async (email, password) => {
@@ -64,7 +64,6 @@ export const AuthProvider = ({ children }) => {
 
     return { user: data.user };
   };
-
 
   const logout = async () => {
     await supabase.auth.signOut();

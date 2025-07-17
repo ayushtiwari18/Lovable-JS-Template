@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 import {
   ShoppingCart,
   User,
@@ -30,9 +31,14 @@ export const Header = () => {
   const { getTotalItems } = useCart();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const handleLogout = () => {
     logout();
+    toast({
+      title: "Logged Out",
+      description: "You have been successfully logged out.",
+    });
     navigate("/");
   };
 
@@ -49,12 +55,9 @@ export const Header = () => {
   };
 
   const getUserInitials = (name) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+    if (!name || typeof name !== "string") return "👤";
+    const [first, last] = name.trim().split(" ");
+    return (first[0] + (last ? last[0] : "")).toUpperCase();
   };
 
   return (
