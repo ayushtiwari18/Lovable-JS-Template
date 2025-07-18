@@ -79,7 +79,6 @@ export const AuthProvider = ({ children }) => {
       name,
     });
 
-    // Validate required fields
     if (!email || !password) {
       return { error: "Email and password are required" };
     }
@@ -92,17 +91,13 @@ export const AuthProvider = ({ children }) => {
       const signUpData = {
         email: email.trim(),
         password,
-      };
-
-      // Only add metadata if name is provided
-      if (name && name.trim() !== "") {
-        signUpData.options = {
+        options: {
           data: {
-            name: name.trim(),
-            full_name: name.trim(),
+            name: name?.trim() || "",
+            full_name: name?.trim() || "",
           },
-        };
-      }
+        },
+      };
 
       console.log("Calling supabase.auth.signUp with:", {
         email: signUpData.email,
@@ -119,7 +114,6 @@ export const AuthProvider = ({ children }) => {
 
       console.log("Signup response:", data);
 
-      // Check if email confirmation is required
       if (data.user && !data.user.email_confirmed_at) {
         console.log("Email confirmation required");
         return {

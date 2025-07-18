@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient.js"; //
+import { supabase } from "@/lib/supabaseClient.js";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -49,8 +49,7 @@ const Register = () => {
       password: formData.password,
       options: {
         data: {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
+          name: `${formData.firstName} ${formData.lastName}`,
         },
       },
     });
@@ -66,25 +65,6 @@ const Register = () => {
       return;
     }
 
-    // ✅ Insert into customers table after signup success
-    if (data.user) {
-      const { error: insertError } = await supabase.from("customers").insert({
-        id: data.user.id,
-        name: `${formData.firstName} ${formData.lastName}`,
-        email: formData.email,
-      });
-
-      if (insertError) {
-        console.error("Insert Error:", insertError.message);
-        toast({
-          title: "Error saving profile",
-          description: insertError.message,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
     toast({
       title: "Account Created!",
       description: "You're now signed in.",
@@ -92,16 +72,6 @@ const Register = () => {
 
     navigate("/");
   };
-
-  // Redirect to /verify-phone with user details
-  // navigate("/verify-phone", {
-  //   state: {
-  //     userId: data.user.id,
-  //     email: formData.email,
-  //     firstName: formData.firstName,
-  //     lastName: formData.lastName,
-  //   },
-  // });
 
   return (
     <Layout>
