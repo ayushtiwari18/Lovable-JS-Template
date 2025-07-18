@@ -1,104 +1,11 @@
 import { useParams, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Star, Heart } from "lucide-react";
+import { Star, Heart, Loader2 } from "lucide-react";
 import { useFavourites } from "@/contexts/FavouritesContext";
 import { useToast } from "@/hooks/use-toast";
-
-const mockProducts = {
-  trophies: [
-    {
-      id: "1",
-      name: "Golden Achievement Trophy",
-      price: 29.99,
-      image: "/placeholder.svg",
-      rating: 4.8,
-    },
-    {
-      id: "5",
-      name: "Silver Star Trophy",
-      price: 24.99,
-      image: "/placeholder.svg",
-      rating: 4.7,
-    },
-    {
-      id: "6",
-      name: "Crystal Excellence Award",
-      price: 34.99,
-      image: "/placeholder.svg",
-      rating: 4.9,
-    },
-  ],
-  "photo-frames": [
-    {
-      id: "2",
-      name: "Elegant Photo Frame",
-      price: 24.99,
-      image: "/placeholder.svg",
-      rating: 4.9,
-    },
-    {
-      id: "7",
-      name: "Wooden Family Frame",
-      price: 19.99,
-      image: "/placeholder.svg",
-      rating: 4.6,
-    },
-    {
-      id: "8",
-      name: "Modern Digital Frame",
-      price: 39.99,
-      image: "/placeholder.svg",
-      rating: 4.8,
-    },
-  ],
-  "key-holders": [
-    {
-      id: "3",
-      name: "Wooden Key Holder",
-      price: 19.99,
-      image: "/placeholder.svg",
-      rating: 4.7,
-    },
-    {
-      id: "9",
-      name: "Metal Key Organizer",
-      price: 16.99,
-      image: "/placeholder.svg",
-      rating: 4.5,
-    },
-    {
-      id: "10",
-      name: "Personalized Key Rack",
-      price: 22.99,
-      image: "/placeholder.svg",
-      rating: 4.8,
-    },
-  ],
-  calendars: [
-    {
-      id: "4",
-      name: "Custom Photo Calendar",
-      price: 15.99,
-      image: "/placeholder.svg",
-      rating: 4.6,
-    },
-    {
-      id: "11",
-      name: "Family Memory Calendar",
-      price: 18.99,
-      image: "/placeholder.svg",
-      rating: 4.7,
-    },
-    {
-      id: "12",
-      name: "Business Desk Calendar",
-      price: 12.99,
-      image: "/placeholder.svg",
-      rating: 4.4,
-    },
-  ],
-};
+import { supabase } from "@/lib/supabaseClient"; // Adjust import path as needed
 
 const categoryNames = {
   trophies: "Trophies",
@@ -109,11 +16,50 @@ const categoryNames = {
 
 const Category = () => {
   const { categoryId } = useParams();
-  const products = mockProducts[categoryId] || [];
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const categoryName = categoryNames[categoryId] || "Category";
   const { addToFavourites, removeFromFavourites, isFavourite } =
     useFavourites();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch products from categories table where slug matches categoryId
+        const { data, error } = await supabase
+          .from("categories")
+          .select("*")
+          .eq("slug", categoryId);
+
+        if (error) {
+          throw error;
+        }
+
+        if (!data || data.length === 0) {
+          setProducts([]);
+          setError("No products found in this category");
+          return;
+        }
+
+        setProducts(data);
+      } catch (err) {
+        console.error("Error fetching products:", err);
+        setError("Failed to load products. Please try again.");
+        setProducts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (categoryId) {
+      fetchProducts();
+    }
+  }, [categoryId]);
 
   const handleToggleFavourite = (product) => {
     const favouriteItem = {
@@ -140,6 +86,117 @@ const Category = () => {
     }
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <Layout>
+        <div className="bg-gradient-to-br from-primary/5 to-yellow-50 py-16">
+          <div className="container mx-auto px-4">
+            <div className="text-center">
+              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+                {categoryName}
+              </h1>
+              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                Explore our collection of high-quality{" "}
+                {categoryName.toLowerCase()} with full customization options.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <section className="py-16 bg-white">
+          <div className="container mx-auto px-4">
+            <div className="flex justify-center items-center min-h-64">
+              <div className="text-center">
+                <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+                <p className="text-gray-600 text-lg">Loading products...</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </Layout>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Layout>
+        <div className="bg-gradient-to-br from-primary/5 to-yellow-50 py-16">
+          <div className="container mx-auto px-4">
+            <div className="text-center">
+              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+                {categoryName}
+              </h1>
+              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                Explore our collection of high-quality{" "}
+                {categoryName.toLowerCase()} with full customization options.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <section className="py-16 bg-white">
+          <div className="container mx-auto px-4">
+            <div className="flex justify-center items-center min-h-64">
+              <div className="text-center">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
+                  <p className="text-red-700 font-medium">{error}</p>
+                  <Button
+                    onClick={() => window.location.reload()}
+                    className="mt-4"
+                    variant="outline"
+                  >
+                    Try Again
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </Layout>
+    );
+  }
+
+  // Empty state
+  if (products.length === 0) {
+    return (
+      <Layout>
+        <div className="bg-gradient-to-br from-primary/5 to-yellow-50 py-16">
+          <div className="container mx-auto px-4">
+            <div className="text-center">
+              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+                {categoryName}
+              </h1>
+              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                Explore our collection of high-quality{" "}
+                {categoryName.toLowerCase()} with full customization options.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <section className="py-16 bg-white">
+          <div className="container mx-auto px-4">
+            <div className="flex justify-center items-center min-h-64">
+              <div className="text-center">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 max-w-md mx-auto">
+                  <p className="text-gray-600 text-lg mb-4">
+                    No products found in this category yet.
+                  </p>
+                  <Link to="/">
+                    <Button>Browse All Categories</Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </Layout>
+    );
+  }
+
+  // Main content with products
   return (
     <Layout>
       <div className="bg-gradient-to-br from-primary/5 to-yellow-50 py-16">
@@ -166,9 +223,12 @@ const Category = () => {
               >
                 <div className="relative aspect-square bg-gray-100 overflow-hidden">
                   <img
-                    src={product.image}
+                    src={product.image || "/placeholder.svg"}
                     alt={product.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => {
+                      e.target.src = "/placeholder.svg";
+                    }}
                   />
                   <button
                     onClick={() => handleToggleFavourite(product)}
@@ -189,12 +249,14 @@ const Category = () => {
                     <span className="text-sm text-primary font-medium">
                       {categoryName}
                     </span>
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                      <span className="text-sm text-gray-600 ml-1">
-                        {product.rating}
-                      </span>
-                    </div>
+                    {product.rating && (
+                      <div className="flex items-center">
+                        <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                        <span className="text-sm text-gray-600 ml-1">
+                          {Number(product.rating).toFixed(1)}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -202,9 +264,16 @@ const Category = () => {
                   </h3>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-2xl font-bold text-primary">
-                      ${product.price}
-                    </span>
+                    {product.price && (
+                      <span className="text-2xl font-bold text-primary">
+                        ${Number(product.price).toFixed(2)}
+                      </span>
+                    )}
+                    {!product.price && (
+                      <span className="text-lg text-gray-500">
+                        Price on request
+                      </span>
+                    )}
                     <Link to={`/product/${product.id}`}>
                       <Button size="sm">View Details</Button>
                     </Link>
