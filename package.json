@@ -1,5 +1,0 @@
-{
-  "dependencies": {
-    "@supabase/supabase-js": "github:supabase/supabase-js"
-  }
-}
