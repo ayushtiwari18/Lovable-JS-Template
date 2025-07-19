@@ -17,7 +17,7 @@ import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Admin from "./pages/Admin";
+import { AdminDashboard } from "./components/admin/AdminDashboard";
 import Favourites from "./pages/Favourites";
 import MyOrders from "./pages/MyOrders";
 import OrderDetail from "./pages/OrderDetail";
@@ -61,7 +61,7 @@ const App = () => (
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/verify-phone" element={<VerifyPhone />} />
-                <Route path="/admin" element={<Admin />} />
+                <Route path="/admin/*" element={<AdminDashboard />} />
                 <Route path="/favourites" element={<Favourites />} />
                 <Route path="/my-orders" element={<MyOrders />} />
                 <Route path="/order/:orderId" element={<OrderDetail />} />
