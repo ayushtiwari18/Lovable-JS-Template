@@ -43,6 +43,10 @@ const Login = () => {
     password: "",
   });
 
+  const from = location.state?.from?.pathname || "/";
+  navigate(from, { replace: true });
+
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
