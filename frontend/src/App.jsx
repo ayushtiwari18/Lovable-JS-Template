@@ -40,8 +40,12 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/shop" element={<Shop />} />
-                <Route path="/category/:categoryId" element={<Category />} />
-                <Route path="/product/:productId" element={<ProductDetail />} />
+                <Route path="/category/:slug/products" element={<Category />} />
+
+                <Route
+                  path="/category/:slug/products/:productId"
+                  element={<ProductDetail />}
+                />
                 <Route path="/about" element={<About />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/cart" element={<Cart />} />
@@ -53,7 +57,7 @@ const App = () => (
                 <Route path="/favourites" element={<Favourites />} />
                 <Route path="/my-orders" element={<MyOrders />} />
                 <Route path="/order/:orderId" element={<OrderDetail />} />
-                <Route path="/personal-details" element={<PersonalDetails />} /> 
+                <Route path="/personal-details" element={<PersonalDetails />} />
                 <Route path="/terms-conditions" element={<TermsConditions />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="*" element={<NotFound />} />

@@ -5,21 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Star, Heart, Loader2 } from "lucide-react";
 import { useFavourites } from "@/contexts/FavouritesContext";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabaseClient"; // Adjust import path as needed
-
-const categoryNames = {
-  trophies: "Trophies",
-  "photo-frames": "Photo Frames",
-  "key-holders": "Key Holders",
-  calendars: "Calendars",
-};
+import { supabase } from "@/lib/supabaseClient";
 
 const Category = () => {
-  const { categoryId } = useParams();
+  const { slug } = useParams(); // ✅ use slug instead of categoryId
   const [products, setProducts] = useState([]);
+  const [categoryName, setCategoryName] = useState("Category");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const categoryName = categoryNames[categoryId] || "Category";
   const { addToFavourites, removeFromFavourites, isFavourite } =
     useFavourites();
   const { toast } = useToast();
@@ -30,23 +23,31 @@ const Category = () => {
         setLoading(true);
         setError(null);
 
-        // Fetch products from categories table where slug matches categoryId
-        const { data, error } = await supabase
+        // Step 1: Get the category by slug
+        const { data: categories, error: categoryError } = await supabase
           .from("categories")
+          .select("id, name")
+          .eq("slug", slug)
+          .single();
+
+        if (categoryError || !categories) {
+          throw new Error("Category not found");
+        }
+
+        const categoryId = categories.id;
+        setCategoryName(categories.name);
+
+        // Step 2: Fetch products for this category
+        const { data: productsData, error: productError } = await supabase
+          .from("products")
           .select("*")
-          .eq("slug", categoryId);
+          .eq("category_id", categoryId);
 
-        if (error) {
-          throw error;
+        if (productError) {
+          throw productError;
         }
 
-        if (!data || data.length === 0) {
-          setProducts([]);
-          setError("No products found in this category");
-          return;
-        }
-
-        setProducts(data);
+        setProducts(productsData);
       } catch (err) {
         console.error("Error fetching products:", err);
         setError("Failed to load products. Please try again.");
@@ -56,10 +57,10 @@ const Category = () => {
       }
     };
 
-    if (categoryId) {
+    if (slug) {
       fetchProducts();
     }
-  }, [categoryId]);
+  }, [slug]);
 
   const handleToggleFavourite = (product) => {
     const favouriteItem = {
@@ -86,135 +87,62 @@ const Category = () => {
     }
   };
 
-  // Loading state
   if (loading) {
     return (
       <Layout>
-        <div className="bg-gradient-to-br from-primary/5 to-yellow-50 py-16">
-          <div className="container mx-auto px-4">
-            <div className="text-center">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                {categoryName}
-              </h1>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Explore our collection of high-quality{" "}
-                {categoryName.toLowerCase()} with full customization options.
-              </p>
-            </div>
-          </div>
-        </div>
-
         <section className="py-16 bg-white">
-          <div className="container mx-auto px-4">
-            <div className="flex justify-center items-center min-h-64">
-              <div className="text-center">
-                <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-                <p className="text-gray-600 text-lg">Loading products...</p>
-              </div>
-            </div>
+          <div className="container mx-auto px-4 text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+            <p className="text-gray-600 text-lg">Loading products...</p>
           </div>
         </section>
       </Layout>
     );
   }
 
-  // Error state
   if (error) {
     return (
       <Layout>
-        <div className="bg-gradient-to-br from-primary/5 to-yellow-50 py-16">
-          <div className="container mx-auto px-4">
-            <div className="text-center">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                {categoryName}
-              </h1>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Explore our collection of high-quality{" "}
-                {categoryName.toLowerCase()} with full customization options.
-              </p>
-            </div>
-          </div>
-        </div>
-
         <section className="py-16 bg-white">
-          <div className="container mx-auto px-4">
-            <div className="flex justify-center items-center min-h-64">
-              <div className="text-center">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
-                  <p className="text-red-700 font-medium">{error}</p>
-                  <Button
-                    onClick={() => window.location.reload()}
-                    className="mt-4"
-                    variant="outline"
-                  >
-                    Try Again
-                  </Button>
-                </div>
-              </div>
-            </div>
+          <div className="container mx-auto px-4 text-center">
+            <p className="text-red-700 font-medium">{error}</p>
+            <Button
+              onClick={() => window.location.reload()}
+              className="mt-4"
+              variant="outline"
+            >
+              Try Again
+            </Button>
           </div>
         </section>
       </Layout>
     );
   }
 
-  // Empty state
   if (products.length === 0) {
     return (
       <Layout>
-        <div className="bg-gradient-to-br from-primary/5 to-yellow-50 py-16">
-          <div className="container mx-auto px-4">
-            <div className="text-center">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                {categoryName}
-              </h1>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Explore our collection of high-quality{" "}
-                {categoryName.toLowerCase()} with full customization options.
-              </p>
-            </div>
-          </div>
-        </div>
-
         <section className="py-16 bg-white">
-          <div className="container mx-auto px-4">
-            <div className="flex justify-center items-center min-h-64">
-              <div className="text-center">
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 max-w-md mx-auto">
-                  <p className="text-gray-600 text-lg mb-4">
-                    No products found in this category yet.
-                  </p>
-                  <Link to="/">
-                    <Button>Browse All Categories</Button>
-                  </Link>
-                </div>
-              </div>
-            </div>
+          <div className="container mx-auto px-4 text-center">
+            <p className="text-gray-600 text-lg mb-4">
+              No products found in this category yet.
+            </p>
+            <Link to="/">
+              <Button>Browse All Categories</Button>
+            </Link>
           </div>
         </section>
       </Layout>
     );
   }
 
-  // Main content with products
   return (
     <Layout>
-      <div className="bg-gradient-to-br from-primary/5 to-yellow-50 py-16">
-        <div className="container mx-auto px-4">
-          <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              {categoryName}
-            </h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Explore our collection of high-quality{" "}
-              {categoryName.toLowerCase()} with full customization options.
-            </p>
-          </div>
-        </div>
-      </div>
-
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
+          <h1 className="text-3xl font-bold mb-8 text-center">
+            {categoryName}
+          </h1>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {products.map((product) => (
               <div
@@ -226,9 +154,7 @@ const Category = () => {
                     src={product.image || "/placeholder.svg"}
                     alt={product.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    onError={(e) => {
-                      e.target.src = "/placeholder.svg";
-                    }}
+                    onError={(e) => (e.target.src = "/placeholder.svg")}
                   />
                   <button
                     onClick={() => handleToggleFavourite(product)}
@@ -264,17 +190,12 @@ const Category = () => {
                   </h3>
 
                   <div className="flex items-center justify-between">
-                    {product.price && (
-                      <span className="text-2xl font-bold text-primary">
-                        ${Number(product.price).toFixed(2)}
-                      </span>
-                    )}
-                    {!product.price && (
-                      <span className="text-lg text-gray-500">
-                        Price on request
-                      </span>
-                    )}
-                    <Link to={`/product/${product.id}`}>
+                    <span className="text-2xl font-bold text-primary">
+                      {product.price
+                        ? `$${Number(product.price).toFixed(2)}`
+                        : "Price on request"}
+                    </span>
+                    <Link to={`/category/${slug}/products/${product.id}`}>
                       <Button size="sm">View Details</Button>
                     </Link>
                   </div>

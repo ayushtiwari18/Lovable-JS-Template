@@ -281,10 +281,10 @@ const Shop = () => {
       </div>
 
       {/* Featured Categories */}
-      <FeaturedCategories />
+      <FeaturedCategories categories={categories} />
 
       {/* Products Grid */}
-      <FeaturedProducts/>
+      <FeaturedProducts />
     </Layout>
   );
 };

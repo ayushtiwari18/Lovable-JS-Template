@@ -254,7 +254,7 @@ export const FeaturedCategories = () => {
                       Starting at ₹{category.price}
                     </p>
                   )}
-                  <Link to={`/category/${category.slug}`}>
+                  <Link to={`/category/${category.slug}/products`}>
                     <Button
                       variant="outline"
                       className="w-full group-hover:bg-primary group-hover:text-white transition-colors"

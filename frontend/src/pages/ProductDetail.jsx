@@ -11,20 +11,18 @@ import { Star, Upload, ShoppingCart, Heart, ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 const ProductDetail = () => {
-  const { productId } = useParams();
+  const { slug, productId } = useParams();
   const navigate = useNavigate();
   const { addItem } = useCart();
   const { addToFavourites, removeFromFavourites, isFavourite } =
     useFavourites();
   const { toast } = useToast();
 
-  // Product state
   const [product, setProduct] = useState(null);
   const [productImages, setProductImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Customization state
   const [customization, setCustomization] = useState({
     text: "",
     color: "",
@@ -32,81 +30,62 @@ const ProductDetail = () => {
     uploadedImage: null,
   });
 
-  // Fetch product data from Supabase
   useEffect(() => {
     const fetchProduct = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // First, let's try without .single() to see what we get
-        const { data: productData, error: productError } = await supabase
+        const { data, error: fetchError } = await supabase
           .from("products")
           .select(
             `
             *,
             categories (
               id,
-              name
+              name,
+              slug
             )
           `
           )
           .eq("id", productId);
 
-        if (productError) {
-          console.error("Supabase error:", productError);
-          throw productError;
+        if (fetchError) throw fetchError;
+        if (!data || data.length === 0) throw new Error("Product not found");
+
+        const fetchedProduct = data[0];
+        if (fetchedProduct.categories?.slug !== slug) {
+          throw new Error("Product does not belong to this category");
         }
 
-        // Check if we got any data
-        if (!productData || productData.length === 0) {
-          throw new Error("Product not found");
-        }
+        setProduct(fetchedProduct);
 
-        // Check if we got multiple rows (shouldn't happen with unique ID)
-        if (productData.length > 1) {
-          console.warn("Multiple products found for ID:", productId);
-        }
-
-        // Take the first product
-        const product = productData[0];
-        setProduct(product);
-
-        // Handle additional images from the array field
-        const additionalImages = product.additional_images || [];
         const allImages = [];
-
-        // Add main image
-        if (product.image_url) {
+        if (fetchedProduct.image_url) {
           allImages.push({
             id: "main",
-            image_url: product.image_url,
-            alt_text: product.title,
+            image_url: fetchedProduct.image_url,
+            alt_text: fetchedProduct.title,
             display_order: 0,
           });
         }
 
-        // Add additional images
-        additionalImages.forEach((imageUrl, index) => {
+        (fetchedProduct.additional_images || []).forEach((url, idx) => {
           allImages.push({
-            id: `additional-${index}`,
-            image_url: imageUrl,
-            alt_text: `${product.title} ${index + 2}`,
-            display_order: index + 1,
+            id: `additional-${idx}`,
+            image_url: url,
+            alt_text: `${fetchedProduct.title} ${idx + 2}`,
+            display_order: idx + 1,
           });
         });
 
         setProductImages(allImages);
 
-        // Set default customization options from customizable_fields
-        const customizableFields = product.customizable_fields || {};
-        const defaultColor = customizableFields.colors?.[0] || "";
-        const defaultSize = customizableFields.sizes?.[0] || "";
-
+        const fields = fetchedProduct.customizable_fields || {};
         setCustomization((prev) => ({
           ...prev,
-          color: defaultColor,
-          size: defaultSize,
+          color: fields.colors?.[0] || "",
+          size: fields.sizes?.[0] || "",
         }));
       } catch (err) {
         console.error("Error fetching product:", err);
@@ -116,45 +95,27 @@ const ProductDetail = () => {
       }
     };
 
-    if (productId) {
-      // Validate that productId looks like a UUID
-      const uuidRegex =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(productId)) {
-        setError("Invalid product ID format");
-        setLoading(false);
-        return;
-      }
-
-      fetchProduct();
-    } else {
-      setError("No product ID provided");
+    if (!productId || !slug) {
+      setError("Missing route parameters");
       setLoading(false);
+      return;
     }
-  }, [productId]);
 
-  // Get customization options from customizable_fields
+    fetchProduct();
+  }, [productId, slug]);
+
   const getCustomizationOptions = (type) => {
     if (!product?.customizable_fields) return [];
-
     const fields = product.customizable_fields;
-    switch (type) {
-      case "color":
-        return fields.colors || [];
-      case "size":
-        return fields.sizes || [];
-      default:
-        return [];
-    }
+    return type === "color" ? fields.colors || [] : fields.sizes || [];
   };
 
   const handleAddToCart = () => {
     if (!product) return;
-
     addItem({
       id: product.id,
       name: product.title,
-      price: product.price / 100, // Convert from cents to dollars
+      price: product.price / 100,
       image: product.image_url,
       customization: {
         text: customization.text,
@@ -163,7 +124,6 @@ const ProductDetail = () => {
         uploadedImage: customization.uploadedImage?.name,
       },
     });
-
     toast({
       title: "Added to Cart!",
       description: `${product.title} has been added to your cart.`,
@@ -172,68 +132,49 @@ const ProductDetail = () => {
 
   const handleToggleFavourite = () => {
     if (!product) return;
-
-    if (isFavourite(product.id)) {
-      removeFromFavourites(product.id);
-      toast({
-        title: "Removed from Favourites",
-        description: `${product.title} has been removed from your favourites.`,
-      });
-    } else {
-      addToFavourites(product);
-      toast({
-        title: "Added to Favourites",
-        description: `${product.title} has been added to your favourites.`,
-      });
-    }
+    const action = isFavourite(product.id)
+      ? removeFromFavourites
+      : addToFavourites;
+    action(product);
+    toast({
+      title: isFavourite(product.id)
+        ? "Removed from Favourites"
+        : "Added to Favourites",
+      description: `${product.title} has been ${
+        isFavourite(product.id) ? "removed from" : "added to"
+      } your favourites.`,
+    });
   };
 
-  const handleImageUpload = (event) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setCustomization({ ...customization, uploadedImage: file });
-    }
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) setCustomization({ ...customization, uploadedImage: file });
   };
 
-  // Format price from cents to dollars
-  const formatPrice = (priceInCents) => {
-    return (priceInCents / 100).toFixed(2);
-  };
+  const formatPrice = (cents) => (cents / 100).toFixed(2);
 
-  // Parse features - handle different data types
   const parseFeatures = (features) => {
     if (!features) return [];
     if (Array.isArray(features)) return features;
-    if (typeof features === "string") {
-      try {
-        return JSON.parse(features);
-      } catch {
-        return features.split(",").map((f) => f.trim());
-      }
+    try {
+      return JSON.parse(features);
+    } catch {
+      return features.split(",").map((f) => f.trim());
     }
-    return [];
   };
 
-  // Get rating (default to 0 if not available)
-  const getProductRating = () => {
-    return product?.rating || 0;
-  };
-
-  // Get review count (default to 0 if not available)
-  const getReviewCount = () => {
-    return product?.review_count || 0;
-  };
+  const colorOptions = getCustomizationOptions("color");
+  const sizeOptions = getCustomizationOptions("size");
+  const features = parseFeatures(product?.features);
+  const rating = product?.rating || 0;
+  const reviewCount = product?.review_count || 0;
 
   if (loading) {
     return (
       <Layout>
-        <div className="py-8">
-          <div className="container mx-auto px-4">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading product...</p>
-            </div>
-          </div>
+        <div className="py-8 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading product...</p>
         </div>
       </Layout>
     );
@@ -242,25 +183,13 @@ const ProductDetail = () => {
   if (error || !product) {
     return (
       <Layout>
-        <div className="py-8">
-          <div className="container mx-auto px-4">
-            <div className="text-center">
-              <p className="text-red-600 mb-4">
-                {error || "Product not found"}
-              </p>
-              <Button onClick={() => navigate("/shop")}>Back to Shop</Button>
-            </div>
-          </div>
+        <div className="py-8 text-center">
+          <p className="text-red-600 mb-4">{error || "Product not found"}</p>
+          <Button onClick={() => navigate("/shop")}>Back to Shop</Button>
         </div>
       </Layout>
     );
   }
-
-  const colorOptions = getCustomizationOptions("color");
-  const sizeOptions = getCustomizationOptions("size");
-  const features = parseFeatures(product.features);
-  const rating = getProductRating();
-  const reviewCount = getReviewCount();
 
   return (
     <Layout>
@@ -270,7 +199,6 @@ const ProductDetail = () => {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Product Images */}
             <div className="space-y-4">
@@ -334,7 +262,6 @@ const ProductDetail = () => {
                 <p className="text-gray-600">{product.description}</p>
               )}
 
-              {/* Features */}
               {features.length > 0 && (
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-3">
@@ -354,14 +281,12 @@ const ProductDetail = () => {
                 </div>
               )}
 
-              {/* Customization Options */}
               {(colorOptions.length > 0 || sizeOptions.length > 0) && (
                 <div className="space-y-4 p-6 bg-gray-50 rounded-2xl">
                   <h3 className="font-semibold text-gray-900">
                     Customize Your Product
                   </h3>
 
-                  {/* Custom Text */}
                   <div>
                     <Label htmlFor="customText">Custom Text (Optional)</Label>
                     <Textarea
@@ -378,7 +303,6 @@ const ProductDetail = () => {
                     />
                   </div>
 
-                  {/* Color Selection */}
                   {colorOptions.length > 0 && (
                     <div>
                       <Label>Color</Label>
@@ -402,7 +326,6 @@ const ProductDetail = () => {
                     </div>
                   )}
 
-                  {/* Size Selection */}
                   {sizeOptions.length > 0 && (
                     <div>
                       <Label>Size</Label>
@@ -426,7 +349,6 @@ const ProductDetail = () => {
                     </div>
                   )}
 
-                  {/* Image Upload */}
                   <div>
                     <Label htmlFor="imageUpload">Upload Image (Optional)</Label>
                     <div className="mt-2">
@@ -454,7 +376,6 @@ const ProductDetail = () => {
                 </div>
               )}
 
-              {/* Action Buttons */}
               <div className="flex gap-4">
                 <Button
                   onClick={handleAddToCart}

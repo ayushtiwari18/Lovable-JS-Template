@@ -114,7 +114,7 @@ const Favourites = () => {
                         <ShoppingCart className="h-4 w-4 mr-1" />
                         Add to Cart
                       </Button>
-                      <Link to={`/product/${product.id}`}>
+                      <Link to={`/category/${slug}/products/${product.id}`}>
                         <Button size="sm">View</Button>
                       </Link>
                     </div>

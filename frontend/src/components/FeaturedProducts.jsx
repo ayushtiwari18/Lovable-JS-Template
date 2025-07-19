@@ -16,14 +16,22 @@ export const FeaturedProducts = () => {
     useFavourites();
   const { toast } = useToast();
 
-  // Fetch featured products from Supabase
   useEffect(() => {
     const fetchFeaturedProducts = async () => {
       try {
         setLoading(true);
         const { data, error } = await supabase
           .from("products")
-          .select("*")
+          .select(
+            `
+            *,
+            categories (
+              name,
+              slug,
+              rating
+            )
+          `
+          )
           .eq("featured", true)
           .order("created_at", { ascending: false })
           .limit(8);
@@ -33,6 +41,7 @@ export const FeaturedProducts = () => {
         const transformedData = data.map((product) => ({
           ...product,
           category_name: product.categories?.name || "Uncategorized",
+          category_slug: product.categories?.slug || "uncategorized",
           category_rating: product.categories?.rating || null,
         }));
 
@@ -124,7 +133,6 @@ export const FeaturedProducts = () => {
               key={product.id}
               className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group hover-scale"
             >
-              {/* Product Image */}
               <div className="relative aspect-square bg-gray-100 overflow-hidden flex items-center justify-center">
                 {!imageErrorMap[product.id] && product.image_url ? (
                   <img
@@ -155,7 +163,6 @@ export const FeaturedProducts = () => {
                 </button>
               </div>
 
-              {/* Product Info */}
               <div className="p-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-primary font-medium">
@@ -179,7 +186,9 @@ export const FeaturedProducts = () => {
                   <span className="text-2xl font-bold text-primary">
                     ${formatPrice(product.price)}
                   </span>
-                  <Link to={`/product/${product.id}`}>
+                  <Link
+                    to={`/category/${product.category_slug}/products/${product.id}`}
+                  >
                     <Button size="sm" disabled={!product.in_stock}>
                       {product.in_stock ? "View Details" : "Out of Stock"}
                     </Button>
