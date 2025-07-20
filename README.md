@@ -1,1 +1,0 @@
-# shrifal-handicrafts
