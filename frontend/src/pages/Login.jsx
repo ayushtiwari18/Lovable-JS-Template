@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,7 @@ const Spinner = () => (
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const { toast } = useToast();
 
@@ -44,8 +45,6 @@ const Login = () => {
   });
 
   const from = location.state?.from?.pathname || "/";
-  navigate(from, { replace: true });
-
 
   const handleChange = (e) => {
     setFormData({
@@ -63,7 +62,6 @@ const Login = () => {
     setIsSubmitting(false);
 
     if (user) {
-      // Optional: double-check session
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -74,15 +72,7 @@ const Login = () => {
           description: "You have been successfully logged in.",
         });
 
-        // Optional: fetch customer profile if needed
-        // const { data: customer } = await supabase
-        //   .from("customers")
-        //   .select("*")
-        //   .eq("id", user.id)
-        //   .single();
-        // console.log("Customer Profile:", customer);
-
-        navigate("/");
+        navigate(from, { replace: true }); // ✅ Safe redirect here
       } else {
         toast({
           title: "Login Issue",
