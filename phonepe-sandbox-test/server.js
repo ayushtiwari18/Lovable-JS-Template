@@ -4,13 +4,7 @@ const crypto = require("crypto");
 const axios = require("axios");
 const bodyParser = require("body-parser");
 const path = require("path");
-const { createClient } = require("@supabase/supabase-js");
-
-// --- Supabase Initialization ---
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const { supabase } = require("./config/supabaseClient"); // Updated import
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +14,12 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
+
+// Add upload routes AFTER app is declared
+const uploadRoutes = require("./routes/upload");
+app.use("/api/upload", uploadRoutes);
+
+// Rest of your existing code...
 
 // --- ENV ---
 const { MERCHANT_ID, SALT_KEY, SALT_INDEX } = process.env;
@@ -408,6 +408,9 @@ app.get("/status/:txnId", async (req, res) => {
     });
   }
 });
+
+
+
 
 // --- Generic Error Handler ---
 app.use((err, req, res, next) => {
