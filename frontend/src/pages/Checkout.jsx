@@ -34,6 +34,8 @@ const Checkout = () => {
   useEffect(() => {
     if (user) {
       fetchUserProfile();
+    } else {
+      setLoading(false);
     }
   }, [user]);
 
@@ -66,6 +68,7 @@ const Checkout = () => {
         zipCode: address.zipCode || "",
       });
     } catch (error) {
+      console.error("Profile fetch error:", error);
       toast({
         title: "Error",
         description: "Failed to load profile data",
@@ -120,27 +123,60 @@ const Checkout = () => {
     return true;
   };
 
-  // COD: Insert order in DB immediately with correct user_id and customer_id
-  const handleCODPayment = async () => {
-    if (!validateForm()) return;
-    setProcessingPayment(true);
+  // Helper function to create order in database
+  // Helper function to create order in database
+  // Helper function to create order in database
+  const createOrder = async (paymentMethod = "PayNow") => {
     try {
-      // 1. Fetch customer's row for user_id
-      const { data: customer, error: customerError } = await supabase
+      console.log("=== CREATING ORDER ===");
+      console.log("Payment method:", paymentMethod);
+
+      // First, try to get existing customer
+      let { data: customer, error: customerError } = await supabase
         .from("customers")
         .select("id")
         .eq("user_id", user.id)
         .single();
 
-      if (customerError || !customer) {
-        toast({
-          title: "Profile Error",
-          description:
-            "Profile missing. Please complete your profile in Account settings.",
-          variant: "destructive",
-        });
-        setProcessingPayment(false);
-        return;
+      // If customer doesn't exist, create one
+      if (customerError && customerError.code === "PGRST116") {
+        console.log("Customer profile not found, creating new profile...");
+
+        const newCustomerData = {
+          user_id: user.id,
+          name: `${formData.firstName} ${formData.lastName}`,
+          email: formData.email,
+          phone: formData.phone,
+          address: {
+            street: formData.address,
+            city: formData.city,
+            state: formData.state,
+            zipCode: formData.zipCode,
+          },
+          profile_completed: true,
+          bio: null,
+        };
+
+        const { data: newCustomer, error: createError } = await supabase
+          .from("customers")
+          .insert([newCustomerData])
+          .select("id")
+          .single();
+
+        if (createError) {
+          console.error("Failed to create customer profile:", createError);
+          throw new Error(
+            "Failed to create customer profile: " + createError.message
+          );
+        }
+
+        customer = newCustomer;
+        console.log("Created new customer profile:", customer);
+      } else if (customerError) {
+        console.error("Customer lookup error:", customerError);
+        throw new Error(
+          "Failed to lookup customer profile: " + customerError.message
+        );
       }
 
       const subtotal = getTotalPrice();
@@ -148,56 +184,108 @@ const Checkout = () => {
       const total = subtotal + tax;
       const totalPaise = Math.round(total * 100);
 
+      // Create order data - matching EXACT database schema requirements
       const orderData = {
+        // Required UUID fields
         user_id: user.id,
         customer_id: customer.id,
+
+        // Required JSONB fields (cannot be null)
         items: items.map((item) => ({
           id: item.id,
           name: item.name,
           price: item.price,
           quantity: item.quantity,
-          image: item.image,
+          image: item.image || "",
           customization: item.customization || {},
         })),
-        total_price: totalPaise,
-        amount: total,
-        status: "pending",
-        payment_status: "pending",
+
         shipping_info: {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          phone: formData.phone,
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          zipCode: formData.zipCode,
+          firstName: formData.firstName || "",
+          lastName: formData.lastName || "",
+          phone: formData.phone || "",
+          address: formData.address || "",
+          city: formData.city || "",
+          state: formData.state || "",
+          zipCode: formData.zipCode || "",
         },
+
+        // Optional JSONB field
         delivery_info: {
           method: "standard",
-          estimatedDays: 3 - 5,
+          estimatedDays: "3-5",
         },
-        payment_method: "COD",
-        upi_reference: "",
-        transaction_id: "",
+
+        // Required numeric fields
+        total_price: totalPaise,
+        amount: total,
+
+        // Required text fields with defaults or explicit values
+        status: "pending", // Has default but being explicit
+        payment_status: "pending", // Has default but being explicit
+        payment_method: paymentMethod || "PayNow", // NO DEFAULT - must provide
+
+        // Optional text fields (nullable)
+        upi_reference: null,
+        transaction_id: null,
+        order_notes: null,
+
+        // created_at and updated_at have defaults, don't need to provide
       };
 
+      console.log(
+        "Order data being inserted:",
+        JSON.stringify(orderData, null, 2)
+      );
+      console.log("Payment method value:", orderData.payment_method);
+
+      // Insert the order
       const { data, error } = await supabase
         .from("orders")
-        .insert([orderData])
-        .select()
+        .insert([orderData]) // Wrap in array for consistent API
+        .select("*")
         .single();
 
-      if (error) throw new Error("Order creation failed: " + error.message);
+      if (error) {
+        console.error("=== DATABASE INSERT ERROR ===");
+        console.error("Full error object:", error);
+        console.error("Error message:", error.message);
+        console.error("Error code:", error.code);
+        console.error("Error details:", error.details);
+        console.error("Error hint:", error.hint);
+
+        throw new Error(`Database error: ${error.message}`);
+      }
+
+      console.log("=== ORDER CREATED SUCCESSFULLY ===");
+      console.log("Order ID:", data.id);
+      console.log("Payment method saved as:", data.payment_method);
+      return data;
+    } catch (error) {
+      console.error("=== CREATE ORDER FAILED ===");
+      console.error("Error:", error.message);
+      console.error("Stack:", error.stack);
+      throw error;
+    }
+  };
+
+  // COD Payment Handler
+  const handleCODPayment = async () => {
+    if (!validateForm()) return;
+    setProcessingPayment(true);
+    try {
+      const order = await createOrder("COD");
 
       toast({
         title: "Order Placed Successfully!",
-        description: `Order #${data.id.slice(
+        description: `Order #${order.id.slice(
           0,
           8
         )} has been placed. You'll pay on delivery.`,
       });
+
       clearCart();
-      navigate(`/order/${data.id}`);
+      navigate(`/order/${order.id}`);
     } catch (error) {
       toast({
         title: "Order Failed",
@@ -209,11 +297,25 @@ const Checkout = () => {
     }
   };
 
-  // PG/PhonePe: send info to backend, not create order here
+  // PayNow Handler - Create order first, then redirect to payment
   const handlePayNow = async () => {
     if (!validateForm()) return;
     setProcessingPayment(true);
+
     try {
+      // Create order in database first
+      const order = await createOrder("PayNow");
+
+      const totalAmount = Math.round(getTotalPrice() * 1.08 * 100);
+
+      // Set form values for PhonePe
+      document.getElementById("pp-order-id").value = order.id;
+      document.getElementById("pp-amount").value = totalAmount;
+      document.getElementById("pp-customer-email").value = formData.email;
+      document.getElementById("pp-customer-phone").value = formData.phone;
+      document.getElementById(
+        "pp-customer-name"
+      ).value = `${formData.firstName} ${formData.lastName}`;
       document.getElementById("pp-cart-items").value = JSON.stringify(
         items.map((item) => ({
           id: item.id,
@@ -233,21 +335,14 @@ const Checkout = () => {
         state: formData.state,
         zipCode: formData.zipCode,
       });
-      document.getElementById("pp-customer-email").value = formData.email;
-      document.getElementById("pp-customer-phone").value = formData.phone;
-      document.getElementById(
-        "pp-customer-name"
-      ).value = `${formData.firstName} ${formData.lastName}`;
-      document.getElementById("pp-payment-method").value = "PayNow";
-      document.getElementById("pp-total-amount").value = Math.round(
-        getTotalPrice() * 1.08 * 100
-      );
 
+      // Submit form to PhonePe
       payFormRef.current.submit();
-    } catch (err) {
+    } catch (error) {
+      console.error("PayNow failed:", error);
       toast({
         title: "Payment Error",
-        description: err.message,
+        description: error.message,
         variant: "destructive",
       });
       setProcessingPayment(false);
@@ -338,6 +433,7 @@ const Checkout = () => {
                   </div>
                 </div>
               </div>
+
               {/* Shipping Address */}
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
@@ -392,6 +488,7 @@ const Checkout = () => {
                   </div>
                 </div>
               </div>
+
               {/* Payment Methods */}
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
@@ -426,6 +523,7 @@ const Checkout = () => {
                 </p>
               </div>
             </div>
+
             {/* Order Summary */}
             <div className="bg-gray-50 rounded-lg p-6 h-fit">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
@@ -442,6 +540,9 @@ const Checkout = () => {
                         src={item.image}
                         alt={item.name}
                         className="w-12 h-12 object-cover rounded-lg mr-3"
+                        onError={(e) => {
+                          e.target.src = "/placeholder-image.jpg"; // Add fallback image
+                        }}
                       />
                       <div>
                         <p className="font-medium text-sm">{item.name}</p>
@@ -483,6 +584,7 @@ const Checkout = () => {
           </div>
         </div>
       </div>
+
       {/* HIDDEN FORM for PhonePe payment */}
       <form
         ref={payFormRef}
@@ -491,13 +593,13 @@ const Checkout = () => {
         action={PHONEPE_PAY_URL}
         style={{ display: "none" }}
       >
-        <input type="hidden" id="pp-cart-items" name="cartItems" />
-        <input type="hidden" id="pp-shipping-info" name="shippingInfo" />
+        <input type="hidden" id="pp-order-id" name="orderId" />
+        <input type="hidden" id="pp-amount" name="amount" />
         <input type="hidden" id="pp-customer-email" name="customerEmail" />
         <input type="hidden" id="pp-customer-phone" name="customerPhone" />
         <input type="hidden" id="pp-customer-name" name="customerName" />
-        <input type="hidden" id="pp-payment-method" name="paymentMethod" />
-        <input type="hidden" id="pp-total-amount" name="totalAmount" />
+        <input type="hidden" id="pp-cart-items" name="cartItems" />
+        <input type="hidden" id="pp-shipping-info" name="shippingInfo" />
       </form>
     </Layout>
   );
