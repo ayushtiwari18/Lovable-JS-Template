@@ -32,7 +32,6 @@ export const CartProvider = ({ children }) => {
           .single();
 
         if (fetchError && fetchError.code !== "PGRST116") {
-          // PGRST116 is "not found" error, which is fine
           throw fetchError;
         }
 
@@ -75,15 +74,13 @@ export const CartProvider = ({ children }) => {
         );
 
         if (existingItemIndex >= 0) {
-          // Update existing item
           storedCart[existingItemIndex].quantity += quantity;
         } else {
-          // Add new item
           storedCart.push({
             id: product.id,
-            name: product.title || product.name, // Handle both title and name
+            name: product.title || product.name,
             price: product.price,
-            image: product.image_url || product.image, // Handle both image_url and image
+            image: product.image_url || product.image,
             category: product.category,
             quantity: quantity,
             customization: customization,
@@ -110,41 +107,47 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Update item quantity
-  const updateQuantity = async (itemKey, newQuantity) => {
+  // Update item quantity - Fixed function signature
+  const updateQuantity = async (item, newQuantity) => {
     if (newQuantity < 1) {
-      await removeItem(itemKey);
+      await removeFromCart(item);
       return;
     }
 
     try {
       if (user) {
-        // For authenticated users, itemKey is the cart ID
+        // For authenticated users, use cartId
         const { error } = await supabase
           .from("cart_items")
           .update({
             quantity: newQuantity,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", itemKey);
+          .eq("id", item.cartId);
 
         if (error) throw error;
 
         // Update local state
         setCartItems((prev) =>
-          prev.map((item) =>
-            item.cartId === itemKey ? { ...item, quantity: newQuantity } : item
+          prev.map((cartItem) =>
+            cartItem.cartId === item.cartId
+              ? { ...cartItem, quantity: newQuantity }
+              : cartItem
           )
         );
       } else {
         // Guest user - update localStorage
+        const itemKey = `${item.id}-${JSON.stringify(
+          item.customization || {}
+        )}`;
         const storedCart = JSON.parse(
           localStorage.getItem("cart_items") || "[]"
         );
-        const updatedCart = storedCart.map((item) =>
-          `${item.id}-${JSON.stringify(item.customization || {})}` === itemKey
-            ? { ...item, quantity: newQuantity }
-            : item
+        const updatedCart = storedCart.map((cartItem) =>
+          `${cartItem.id}-${JSON.stringify(cartItem.customization || {})}` ===
+          itemKey
+            ? { ...cartItem, quantity: newQuantity }
+            : cartItem
         );
 
         localStorage.setItem("cart_items", JSON.stringify(updatedCart));
@@ -152,36 +155,38 @@ export const CartProvider = ({ children }) => {
       }
     } catch (error) {
       console.error("Error updating quantity:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update quantity.",
-        variant: "destructive",
-      });
+      throw error; // Let calling component handle the error
     }
   };
 
-  // Remove item from cart
-  const removeItem = async (itemKey) => {
+  // Remove item from cart - Fixed function signature
+  const removeFromCart = async (item) => {
     try {
       if (user) {
-        // For authenticated users, itemKey is the cart ID
+        // For authenticated users, use cartId
         const { error } = await supabase
           .from("cart_items")
           .delete()
-          .eq("id", itemKey);
+          .eq("id", item.cartId);
 
         if (error) throw error;
 
         // Update local state
-        setCartItems((prev) => prev.filter((item) => item.cartId !== itemKey));
+        setCartItems((prev) =>
+          prev.filter((cartItem) => cartItem.cartId !== item.cartId)
+        );
       } else {
         // Guest user - remove from localStorage
+        const itemKey = `${item.id}-${JSON.stringify(
+          item.customization || {}
+        )}`;
         const storedCart = JSON.parse(
           localStorage.getItem("cart_items") || "[]"
         );
         const updatedCart = storedCart.filter(
-          (item) =>
-            `${item.id}-${JSON.stringify(item.customization || {})}` !== itemKey
+          (cartItem) =>
+            `${cartItem.id}-${JSON.stringify(cartItem.customization || {})}` !==
+            itemKey
         );
 
         localStorage.setItem("cart_items", JSON.stringify(updatedCart));
@@ -189,33 +194,43 @@ export const CartProvider = ({ children }) => {
       }
     } catch (error) {
       console.error("Error removing item:", error);
-      toast({
-        title: "Error",
-        description: "Failed to remove item.",
-        variant: "destructive",
-      });
+      throw error; // Let calling component handle the error
     }
   };
 
-  // Clear entire cart
+  // Clear entire cart - FIXED
   const clearCart = async () => {
     try {
+      console.log("🧹 Clearing cart...");
+
       if (user) {
-        // Clear from Supabase
+        // Clear cart from database
         const { error } = await supabase
           .from("cart_items")
           .delete()
           .eq("user_id", user.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error("Database clear error:", error);
+          throw error;
+        }
+        console.log("✅ Database cart cleared");
       } else {
         // Clear from localStorage
         localStorage.removeItem("cart_items");
+        console.log("✅ LocalStorage cart cleared");
       }
 
+      // Clear context state - FIXED: Use cartItems, not items
       setCartItems([]);
+      console.log("✅ Context state cleared");
+
+      toast({
+        title: "Cart Cleared",
+        description: "Your cart has been cleared successfully.",
+      });
     } catch (error) {
-      console.error("Error clearing cart:", error);
+      console.error("Failed to clear cart:", error);
       toast({
         title: "Error",
         description: "Failed to clear cart.",
@@ -230,7 +245,6 @@ export const CartProvider = ({ children }) => {
 
     try {
       if (user) {
-        // Authenticated user - fetch from Supabase with correct column names
         const { data: cartData, error } = await supabase
           .from("cart_items")
           .select(
@@ -256,7 +270,6 @@ export const CartProvider = ({ children }) => {
 
         if (error) throw error;
 
-        // Transform data to match expected format
         const transformedItems =
           cartData?.map((item) => ({
             id: item.product_id,
@@ -265,13 +278,12 @@ export const CartProvider = ({ children }) => {
             image: item.products?.image_url,
             category: item.products?.categories?.name || "Product",
             quantity: item.quantity,
-            cartId: item.id, // Store cart table ID for updates
-            customization: null, // Add customization logic if needed
+            cartId: item.id,
+            customization: null,
           })) || [];
 
         setCartItems(transformedItems);
       } else {
-        // Guest user - fetch from localStorage
         const storedCart = JSON.parse(
           localStorage.getItem("cart_items") || "[]"
         );
@@ -297,7 +309,6 @@ export const CartProvider = ({ children }) => {
       const storedCart = JSON.parse(localStorage.getItem("cart_items") || "[]");
       if (storedCart.length === 0) return;
 
-      // Get existing cart items from database
       const { data: existingCart } = await supabase
         .from("cart_items")
         .select("product_id, quantity, id")
@@ -307,12 +318,10 @@ export const CartProvider = ({ children }) => {
         existingCart?.map((item) => [item.product_id, item]) || []
       );
 
-      // Process each item from localStorage
       for (const item of storedCart) {
         const existingItem = existingProductMap.get(item.id);
 
         if (existingItem) {
-          // Update existing item quantity
           const newQuantity = existingItem.quantity + item.quantity;
           await supabase
             .from("cart_items")
@@ -322,7 +331,6 @@ export const CartProvider = ({ children }) => {
             })
             .eq("id", existingItem.id);
         } else {
-          // Insert new item
           await supabase.from("cart_items").insert({
             user_id: user.id,
             product_id: item.id,
@@ -331,10 +339,7 @@ export const CartProvider = ({ children }) => {
         }
       }
 
-      // Clear localStorage after successful sync
       localStorage.removeItem("cart_items");
-
-      // Refresh cart items from database
       await fetchCartItems();
 
       if (storedCart.length > 0) {
@@ -345,11 +350,9 @@ export const CartProvider = ({ children }) => {
       }
     } catch (error) {
       console.error("Error syncing cart:", error);
-      // Don't show error to user as this is background operation
     }
   };
 
-  // Get total price
   const getTotalPrice = () => {
     return cartItems.reduce(
       (total, item) => total + item.price * item.quantity,
@@ -357,12 +360,10 @@ export const CartProvider = ({ children }) => {
     );
   };
 
-  // Get total items count
   const getTotalItems = () => {
     return cartItems.reduce((total, item) => total + item.quantity, 0);
   };
 
-  // Get cart for checkout (with proper format for orders table)
   const getCartForCheckout = () => {
     return cartItems.map((item) => ({
       product_id: item.id,
@@ -374,22 +375,18 @@ export const CartProvider = ({ children }) => {
     }));
   };
 
-  // Load cart items when component mounts or user changes
   useEffect(() => {
     fetchCartItems();
   }, [user]);
 
-  // Sync cart when user logs in (but not on logout)
   useEffect(() => {
     if (user) {
       syncCartToDatabase();
     }
   }, [user]);
 
-  // For guest users, persist to localStorage whenever cartItems change
   useEffect(() => {
     if (!user && cartItems.length > 0) {
-      // Only update localStorage for guest users and when items exist
       const hasNonDatabaseItems = cartItems.some((item) => !item.cartId);
       if (hasNonDatabaseItems) {
         localStorage.setItem("cart_items", JSON.stringify(cartItems));
@@ -398,11 +395,11 @@ export const CartProvider = ({ children }) => {
   }, [cartItems, user]);
 
   const value = {
-    items: cartItems,
+    items: cartItems, // Export as 'items' for consistency
     loading,
     addItem,
     updateQuantity,
-    removeItem,
+    removeFromCart, // Export as 'removeFromCart'
     clearCart,
     getTotalPrice,
     getTotalItems,

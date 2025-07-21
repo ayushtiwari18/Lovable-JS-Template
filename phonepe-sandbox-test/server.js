@@ -180,101 +180,85 @@ app.post("/pay", async (req, res) => {
 
 // --- Payment result redirect (user sees this page after PG) ---
 // --- Payment result redirect (user sees this page after PG) ---
+// --- Payment result redirect (user sees this page after PG) ---
 app.post("/redirect", async (req, res) => {
   console.log("=== REDIRECT ROUTE CALLED ===");
   console.log("Request body:", req.body);
 
-  const {
-    code,
-    merchantId,
-    transactionId, // PhonePe sends OUR order ID as transactionId
-    providerReferenceId,
-  } = req.body;
+  const { code, merchantId, transactionId, providerReferenceId } = req.body;
 
-  // Use transactionId as our order ID (merchantTransactionId)
   const orderIdFromPhonePe = transactionId;
   const phonepeTransactionId = providerReferenceId;
 
-  console.log("Order ID from PhonePe:", orderIdFromPhonePe);
+  console.log("Order ID:", orderIdFromPhonePe);
   console.log("PhonePe Transaction ID:", phonepeTransactionId);
 
   let paymentStatus = "failed";
-  if (code === "PAYMENT_SUCCESS") paymentStatus = "success";
-  else if (code === "PAYMENT_PENDING" || code === "PAYMENT_INITIATED")
-    paymentStatus = "pending";
+  let orderStatus = "failed";
 
-  console.log("Payment status:", paymentStatus);
-
-  // If payment was successful, update orders/payments in Supabase
-  if (paymentStatus === "success") {
-    try {
-      console.log("Updating order status to confirmed for:", orderIdFromPhonePe);
-
-      // 1️⃣ Update order status to "confirmed"
-      const { data: orderUpdate, error: orderError } = await supabase
-        .from("orders")
-        .update({
-          status: "confirmed",
-          payment_status: "completed",
-          transaction_id: phonepeTransactionId,
-          upi_reference: providerReferenceId || "",
-        })
-        .eq("id", orderIdFromPhonePe); // Use the correct order ID
-
-      if (orderError) {
-        console.error("Order update error:", orderError);
-      } else {
-        console.log("Order updated successfully");
-      }
-
-      // 2️⃣ Get order details first for payment record
-      const { data: orderDetails } = await supabase
-        .from("orders")
-        .select("user_id, amount")
-        .eq("id", orderIdFromPhonePe)
-        .single();
-
-      if (orderDetails) {
-        // 3️⃣ Insert payment record with proper user_id
-        const { data: paymentInsert, error: paymentError } = await supabase
-          .from("payments")
-          .insert([
-            {
-              order_id: orderIdFromPhonePe,
-              user_id: orderDetails.user_id, // Use actual user_id from order
-              amount: orderDetails.amount,
-              status: paymentStatus,
-              phonepe_txn_id: phonepeTransactionId,
-              phonepe_response: req.body,
-              customer_info: {},
-            },
-          ]);
-
-        if (paymentError) {
-          console.error("Payment insert error:", paymentError);
-        } else {
-          console.log("Payment record created successfully");
-        }
-      }
-    } catch (error) {
-      console.error("Supabase update error:", error.message);
-    }
-  } else {
-    // Update order as failed/cancelled
-    try {
-      await supabase
-        .from("orders")
-        .update({
-          status: "failed",
-          payment_status: "failed",
-        })
-        .eq("id", orderIdFromPhonePe);
-    } catch (error) {
-      console.error("Failed to update order status:", error);
-    }
+  if (code === "PAYMENT_SUCCESS") {
+    paymentStatus = "completed";
+    orderStatus = "confirmed";
   }
 
-  // Render result page with correct order ID
+  console.log("Attempting update with:", {
+    orderStatus,
+    paymentStatus,
+    phonepeTransactionId,
+    orderId: orderIdFromPhonePe,
+  });
+
+  try {
+    // Add explicit debugging
+    console.log("🔄 Starting database update...");
+
+    const updateData = {
+      status: orderStatus,
+      payment_status: paymentStatus,
+      transaction_id: phonepeTransactionId || "",
+      upi_reference: providerReferenceId || "",
+      updated_at: new Date().toISOString(),
+    };
+
+    console.log("Update data:", updateData);
+
+    const { data: orderUpdate, error: orderError } = await supabase
+      .from("orders")
+      .update(updateData)
+      .eq("id", orderIdFromPhonePe)
+      .select("*"); // Return updated data
+
+    console.log("💾 Update response:", {
+      data: orderUpdate,
+      error: orderError,
+      affectedRows: orderUpdate?.length || 0,
+    });
+
+    if (orderError) {
+      console.error("❌ DATABASE UPDATE FAILED:");
+      console.error("Error:", orderError);
+    } else if (!orderUpdate || orderUpdate.length === 0) {
+      console.error("❌ NO ROWS UPDATED - Order may not exist");
+    } else {
+      console.log("✅ DATABASE UPDATE SUCCESS:", orderUpdate[0]);
+    }
+
+    // Verify update by fetching again
+    console.log("🔍 Verifying update...");
+    const { data: verifyData } = await supabase
+      .from("orders")
+      .select(
+        "status, payment_status, transaction_id, upi_reference, updated_at"
+      )
+      .eq("id", orderIdFromPhonePe)
+      .single();
+
+    console.log("📋 Current database state:", verifyData);
+  } catch (error) {
+    console.error("❌ EXCEPTION during update:", error);
+  }
+
+  // Rest of your response code...
   res.send(`
     <html>
       <head>
@@ -283,12 +267,14 @@ app.post("/redirect", async (req, res) => {
       </head>
       <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
         <h2>${
-          paymentStatus === "success"
+          paymentStatus === "completed"
             ? "✅ Payment Successful!"
             : "❌ Payment Failed"
         }</h2>
         <p><strong>Order ID:</strong> ${orderIdFromPhonePe}</p>
-        <p><strong>PhonePe Transaction:</strong> ${phonepeTransactionId || "N/A"}</p>
+        <p><strong>PhonePe Transaction:</strong> ${
+          phonepeTransactionId || "N/A"
+        }</p>
         <p><strong>Status:</strong> ${paymentStatus}</p>
         <p>Redirecting you to order confirmation...</p>
         <script>
@@ -301,13 +287,12 @@ app.post("/redirect", async (req, res) => {
   `);
 });
 
-
 // --- Payment backend callback ---
 // --- Payment backend callback ---
 app.post("/callback", async (req, res) => {
   console.log("=== CALLBACK ROUTE CALLED ===");
   console.log("Request body:", req.body);
-  
+
   const { code, transactionId, providerReferenceId } = req.body;
 
   // The transactionId from PhonePe is actually our order ID
@@ -324,10 +309,10 @@ app.post("/callback", async (req, res) => {
     try {
       await supabase
         .from("orders")
-        .update({ 
+        .update({
           status: "confirmed",
           payment_status: "completed",
-          transaction_id: phonepeTransactionId
+          transaction_id: phonepeTransactionId,
         })
         .eq("id", merchantTransactionId);
 
@@ -338,31 +323,32 @@ app.post("/callback", async (req, res) => {
         .eq("id", merchantTransactionId)
         .single();
 
-      await supabase.from("payments").insert([{
-        order_id: merchantTransactionId,
-        user_id: orderDetails?.user_id || null,
-        amount: orderDetails?.amount || null,
-        status: paymentStatus,
-        phonepe_txn_id: phonepeTransactionId,
-        phonepe_response: req.body,
-        customer_info: {},
-      }]);
+      await supabase.from("payments").insert([
+        {
+          order_id: merchantTransactionId,
+          user_id: orderDetails?.user_id || null,
+          amount: orderDetails?.amount || null,
+          status: paymentStatus,
+          phonepe_txn_id: phonepeTransactionId,
+          phonepe_response: req.body,
+          customer_info: {},
+        },
+      ]);
     } catch (error) {
       console.error("Supabase update error [callback]:", error.message);
     }
   } else {
     await supabase
       .from("orders")
-      .update({ 
+      .update({
         status: "failed",
-        payment_status: "failed" 
+        payment_status: "failed",
       })
       .eq("id", merchantTransactionId);
   }
 
   res.status(200).json({ ok: true, message: "Callback handled." });
 });
-
 
 // --- Order result info route ---
 app.get("/done", async (req, res) => {

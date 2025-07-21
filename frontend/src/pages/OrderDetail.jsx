@@ -18,30 +18,36 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 
-// ----- Status helpers (no getStatusColor error!) -----
+// ----- Status helpers -----
 const getStatusIcon = (status) => {
   switch (status) {
     case "delivered":
       return <CheckCircle className="h-4 w-4 text-green-600" />;
     case "shipped":
       return <Package className="h-4 w-4 text-blue-600" />;
+    case "confirmed":
     case "processing":
-      return <Clock className="h-4 w-4 text-yellow-600" />;
+      return <Clock className="h-4 w-4 text-blue-600" />;
     case "cancelled":
+    case "failed":
       return <XCircle className="h-4 w-4 text-red-600" />;
     default:
       return <Clock className="h-4 w-4 text-gray-600" />;
   }
 };
+
 const getStatusColor = (status) => {
   switch (status) {
     case "delivered":
       return "bg-green-100 text-green-800";
     case "shipped":
       return "bg-blue-100 text-blue-800";
+    case "confirmed":
+      return "bg-green-100 text-green-800";
     case "processing":
       return "bg-yellow-100 text-yellow-800";
     case "cancelled":
+    case "failed":
       return "bg-red-100 text-red-800";
     default:
       return "bg-gray-100 text-gray-800";
@@ -56,18 +62,50 @@ export default function OrderDetail() {
 
   useEffect(() => {
     if (!orderId || !user) return;
-    setLoading(true);
-    supabase
-      .from("orders")
-      .select("*")
-      .eq("id", orderId)
-      .eq("user_id", user.id)
-      .single()
-      .then(({ data, error }) => {
+
+    const fetchOrder = async () => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from("orders")
+          .select("*")
+          .eq("id", orderId)
+          .eq("user_id", user.id)
+          .single();
+
+        console.log("Order fetch result:", { data, error });
         setOrder(data || null);
+      } catch (error) {
+        console.error("Error fetching order:", error);
+        setOrder(null);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    fetchOrder();
+
+    // No automatic refresh - user can manually refresh page if needed
   }, [orderId, user]);
+
+  // Add a manual refresh button for better UX
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("id", orderId)
+        .eq("user_id", user.id)
+        .single();
+
+      setOrder(data || null);
+    } catch (error) {
+      console.error("Error refreshing order:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading)
     return (
@@ -119,6 +157,17 @@ export default function OrderDetail() {
                 Back to Orders
               </Button>
             </Link>
+            
+            {/* Add manual refresh button */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefresh}
+              disabled={loading}
+            >
+              {loading ? "Refreshing..." : "Refresh"}
+            </Button>
+            
             <div>
               <h1 className="text-3xl font-bold">
                 Order #{order.id.slice(0, 8)}

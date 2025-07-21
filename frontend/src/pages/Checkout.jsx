@@ -31,6 +31,15 @@ const Checkout = () => {
     zipCode: "",
   });
 
+  // Add useEffect to redirect if cart becomes empty
+  useEffect(() => {
+    if (!loading && items.length === 0) {
+      console.log("Cart is empty, redirecting to cart page...");
+      navigate("/cart");
+      return;
+    }
+  }, [items.length, loading, navigate]);
+
   useEffect(() => {
     if (user) {
       fetchUserProfile();
@@ -123,60 +132,25 @@ const Checkout = () => {
     return true;
   };
 
-  // Helper function to create order in database
-  // Helper function to create order in database
-  // Helper function to create order in database
   const createOrder = async (paymentMethod = "PayNow") => {
     try {
       console.log("=== CREATING ORDER ===");
-      console.log("Payment method:", paymentMethod);
+      console.log("User ID:", user.id);
 
-      // First, try to get existing customer
-      let { data: customer, error: customerError } = await supabase
+      const { data: customer, error: customerError } = await supabase
         .from("customers")
         .select("id")
         .eq("user_id", user.id)
         .single();
 
-      // If customer doesn't exist, create one
-      if (customerError && customerError.code === "PGRST116") {
-        console.log("Customer profile not found, creating new profile...");
+      if (customerError) {
+        console.error("❌ Customer lookup failed:", customerError);
+        throw new Error("Customer lookup failed: " + customerError.message);
+      }
 
-        const newCustomerData = {
-          user_id: user.id,
-          name: `${formData.firstName} ${formData.lastName}`,
-          email: formData.email,
-          phone: formData.phone,
-          address: {
-            street: formData.address,
-            city: formData.city,
-            state: formData.state,
-            zipCode: formData.zipCode,
-          },
-          profile_completed: true,
-          bio: null,
-        };
-
-        const { data: newCustomer, error: createError } = await supabase
-          .from("customers")
-          .insert([newCustomerData])
-          .select("id")
-          .single();
-
-        if (createError) {
-          console.error("Failed to create customer profile:", createError);
-          throw new Error(
-            "Failed to create customer profile: " + createError.message
-          );
-        }
-
-        customer = newCustomer;
-        console.log("Created new customer profile:", customer);
-      } else if (customerError) {
-        console.error("Customer lookup error:", customerError);
-        throw new Error(
-          "Failed to lookup customer profile: " + customerError.message
-        );
+      if (!customer || !customer.id) {
+        console.error("❌ No customer ID found");
+        throw new Error("Customer profile not found");
       }
 
       const subtotal = getTotalPrice();
@@ -184,13 +158,9 @@ const Checkout = () => {
       const total = subtotal + tax;
       const totalPaise = Math.round(total * 100);
 
-      // Create order data - matching EXACT database schema requirements
       const orderData = {
-        // Required UUID fields
         user_id: user.id,
         customer_id: customer.id,
-
-        // Required JSONB fields (cannot be null)
         items: items.map((item) => ({
           id: item.id,
           name: item.name,
@@ -199,7 +169,6 @@ const Checkout = () => {
           image: item.image || "",
           customization: item.customization || {},
         })),
-
         shipping_info: {
           firstName: formData.firstName || "",
           lastName: formData.lastName || "",
@@ -209,72 +178,51 @@ const Checkout = () => {
           state: formData.state || "",
           zipCode: formData.zipCode || "",
         },
-
-        // Optional JSONB field
         delivery_info: {
           method: "standard",
           estimatedDays: "3-5",
         },
-
-        // Required numeric fields
         total_price: totalPaise,
         amount: total,
-
-        // Required text fields with defaults or explicit values
-        status: "pending", // Has default but being explicit
-        payment_status: "pending", // Has default but being explicit
-        payment_method: paymentMethod || "PayNow", // NO DEFAULT - must provide
-
-        // Optional text fields (nullable)
+        status: "pending",
+        payment_status: "pending",
+        payment_method: paymentMethod || "PayNow",
         upi_reference: null,
         transaction_id: null,
         order_notes: null,
-
-        // created_at and updated_at have defaults, don't need to provide
       };
 
-      console.log(
-        "Order data being inserted:",
-        JSON.stringify(orderData, null, 2)
-      );
-      console.log("Payment method value:", orderData.payment_method);
-
-      // Insert the order
       const { data, error } = await supabase
         .from("orders")
-        .insert([orderData]) // Wrap in array for consistent API
+        .insert([orderData])
         .select("*")
         .single();
 
       if (error) {
-        console.error("=== DATABASE INSERT ERROR ===");
-        console.error("Full error object:", error);
-        console.error("Error message:", error.message);
-        console.error("Error code:", error.code);
-        console.error("Error details:", error.details);
-        console.error("Error hint:", error.hint);
-
+        console.error("💥 INSERT ERROR:", error);
         throw new Error(`Database error: ${error.message}`);
       }
 
-      console.log("=== ORDER CREATED SUCCESSFULLY ===");
-      console.log("Order ID:", data.id);
-      console.log("Payment method saved as:", data.payment_method);
+      console.log("✅ Order created:", data);
       return data;
     } catch (error) {
-      console.error("=== CREATE ORDER FAILED ===");
-      console.error("Error:", error.message);
-      console.error("Stack:", error.stack);
+      console.error("🚨 CREATE ORDER FAILED:", error);
       throw error;
     }
   };
 
-  // COD Payment Handler
+  // COD Payment Handler - FIXED with proper async/await
   const handleCODPayment = async () => {
     if (!validateForm()) return;
     setProcessingPayment(true);
+
     try {
       const order = await createOrder("COD");
+
+      // Clear cart FIRST and AWAIT it
+      console.log("🧹 Clearing cart after successful COD order...");
+      await clearCart();
+      console.log("✅ Cart cleared successfully");
 
       toast({
         title: "Order Placed Successfully!",
@@ -284,9 +232,10 @@ const Checkout = () => {
         )} has been placed. You'll pay on delivery.`,
       });
 
-      clearCart();
+      // Navigate after cart is cleared
       navigate(`/order/${order.id}`);
     } catch (error) {
+      console.error("COD Payment error:", error);
       toast({
         title: "Order Failed",
         description: error.message,
@@ -297,18 +246,33 @@ const Checkout = () => {
     }
   };
 
-  // PayNow Handler - Create order first, then redirect to payment
+  // PayNow Handler - Clear cart after PhonePe redirect
   const handlePayNow = async () => {
     if (!validateForm()) return;
     setProcessingPayment(true);
 
     try {
+      // Store cart data before clearing (needed for PhonePe form)
+      const cartItemsForPhonePe = items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        image: item.image,
+        customization: item.customization || {},
+      }));
+
       // Create order in database first
       const order = await createOrder("PayNow");
 
+      // Clear cart immediately after order creation
+      console.log("🧹 Clearing cart before PhonePe redirect...");
+      await clearCart();
+      console.log("✅ Cart cleared successfully");
+
       const totalAmount = Math.round(getTotalPrice() * 1.08 * 100);
 
-      // Set form values for PhonePe
+      // Set form values for PhonePe using stored cart data
       document.getElementById("pp-order-id").value = order.id;
       document.getElementById("pp-amount").value = totalAmount;
       document.getElementById("pp-customer-email").value = formData.email;
@@ -316,16 +280,11 @@ const Checkout = () => {
       document.getElementById(
         "pp-customer-name"
       ).value = `${formData.firstName} ${formData.lastName}`;
-      document.getElementById("pp-cart-items").value = JSON.stringify(
-        items.map((item) => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          image: item.image,
-          customization: item.customization || {},
-        }))
-      );
+
+      // Use stored cart data since cart is now cleared
+      document.getElementById("pp-cart-items").value =
+        JSON.stringify(cartItemsForPhonePe);
+
       document.getElementById("pp-shipping-info").value = JSON.stringify({
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -349,9 +308,9 @@ const Checkout = () => {
     }
   };
 
-  if (items.length === 0) {
-    navigate("/cart");
-    return null;
+  // Early return if cart is empty
+  if (items.length === 0 && !loading) {
+    return null; // Will be redirected by useEffect
   }
 
   if (loading) {
@@ -378,7 +337,7 @@ const Checkout = () => {
         <div className="container mx-auto px-4">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Checkout Form */}
+            {/* Rest of your existing JSX remains the same */}
             <div className="space-y-8">
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
@@ -541,7 +500,7 @@ const Checkout = () => {
                         alt={item.name}
                         className="w-12 h-12 object-cover rounded-lg mr-3"
                         onError={(e) => {
-                          e.target.src = "/placeholder-image.jpg"; // Add fallback image
+                          e.target.src = "/placeholder-image.jpg";
                         }}
                       />
                       <div>
