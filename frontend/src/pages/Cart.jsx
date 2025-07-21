@@ -24,7 +24,7 @@ const Cart = () => {
     setLoading(true);
     try {
       if (user) {
-        // Authenticated user - fetch from Supabase with correct column names
+        // Authenticated user - fetch from Supabase
         const { data: cartData, error } = await supabase
           .from("cart_items")
           .select(
@@ -48,7 +48,6 @@ const Cart = () => {
           .eq("user_id", user.id);
 
         if (error) {
-          console.error("Error fetching cart:", error);
           toast({
             title: "Error",
             description: "Failed to load cart items.",
@@ -66,7 +65,7 @@ const Cart = () => {
             image: item.products?.image_url,
             category: item.products?.categories?.name || "Product",
             quantity: item.quantity,
-            cartId: item.id, // Store cart table ID for updates
+            cartId: item.id,
             customization: null, // Add customization logic if needed
           })) || [];
 
@@ -79,7 +78,6 @@ const Cart = () => {
         setCartItems(storedCart);
       }
     } catch (error) {
-      console.error("Error loading cart:", error);
       toast({
         title: "Error",
         description: "Failed to load cart items.",
@@ -93,13 +91,11 @@ const Cart = () => {
   // Update quantity in database or localStorage
   const updateQuantity = async (item, newQuantity) => {
     if (newQuantity < 1) return;
-
     const itemKey = user ? item.cartId : getItemKey(item);
     setUpdatingItems((prev) => new Set(prev).add(itemKey));
 
     try {
       if (user) {
-        // Update in Supabase
         const { error } = await supabase
           .from("cart_items")
           .update({
@@ -109,7 +105,6 @@ const Cart = () => {
           .eq("id", item.cartId);
 
         if (error) {
-          console.error("Error updating quantity:", error);
           toast({
             title: "Error",
             description: "Failed to update quantity.",
@@ -143,7 +138,6 @@ const Cart = () => {
         )
       );
     } catch (error) {
-      console.error("Error updating quantity:", error);
       toast({
         title: "Error",
         description: "Failed to update quantity.",
@@ -165,14 +159,12 @@ const Cart = () => {
 
     try {
       if (user) {
-        // Remove from Supabase
         const { error } = await supabase
           .from("cart_items")
           .delete()
           .eq("id", item.cartId);
 
         if (error) {
-          console.error("Error removing item:", error);
           toast({
             title: "Error",
             description: "Failed to remove item.",
@@ -191,7 +183,6 @@ const Cart = () => {
         localStorage.setItem("cart_items", JSON.stringify(updatedCart));
       }
 
-      // Update local state
       setCartItems((prev) =>
         prev.filter((cartItem) =>
           user
@@ -205,7 +196,6 @@ const Cart = () => {
         description: `${item.name} has been removed from your cart.`,
       });
     } catch (error) {
-      console.error("Error removing item:", error);
       toast({
         title: "Error",
         description: "Failed to remove item.",
@@ -240,7 +230,6 @@ const Cart = () => {
         description: `${item.name} has been moved to your wishlist.`,
       });
     } catch (error) {
-      console.error("Error moving to wishlist:", error);
       toast({
         title: "Error",
         description: "Failed to move item to wishlist.",
@@ -253,7 +242,6 @@ const Cart = () => {
   const getItemKey = (item) =>
     `${item.id}-${JSON.stringify(item.customization || {})}`;
 
-  // Calculate totals
   const getTotalPrice = () => {
     return cartItems.reduce(
       (total, item) => total + item.price * item.quantity,
@@ -273,7 +261,6 @@ const Cart = () => {
       const storedCart = JSON.parse(localStorage.getItem("cart_items") || "[]");
       if (storedCart.length === 0) return;
 
-      // Get existing cart items from database
       const { data: existingCart } = await supabase
         .from("cart_items")
         .select("product_id, quantity")
@@ -283,24 +270,20 @@ const Cart = () => {
         existingCart?.map((item) => item.product_id) || []
       );
 
-      // Prepare items to insert/update
       const itemsToProcess = [];
 
       for (const item of storedCart) {
         if (existingProductIds.has(item.id)) {
-          // Update existing item quantity
           const existingItem = existingCart.find(
             (cart) => cart.product_id === item.id
           );
           const newQuantity = existingItem.quantity + item.quantity;
-
           itemsToProcess.push({
             type: "update",
             product_id: item.id,
             quantity: newQuantity,
           });
         } else {
-          // Insert new item
           itemsToProcess.push({
             type: "insert",
             user_id: user.id,
@@ -310,7 +293,6 @@ const Cart = () => {
         }
       }
 
-      // Process updates
       for (const item of itemsToProcess) {
         if (item.type === "update") {
           await supabase
@@ -330,10 +312,8 @@ const Cart = () => {
         }
       }
 
-      // Clear localStorage after sync
       localStorage.removeItem("cart_items");
 
-      // Refresh cart items
       await fetchCartItems();
 
       if (storedCart.length > 0) {
@@ -343,16 +323,14 @@ const Cart = () => {
         });
       }
     } catch (error) {
-      console.error("Error syncing cart:", error);
+      // Ignore or display
     }
   };
 
-  // Load cart items on component mount and user change
   useEffect(() => {
     fetchCartItems();
   }, [user]);
 
-  // Sync cart when user logs in
   useEffect(() => {
     if (user) {
       syncCartToDatabase();
@@ -398,7 +376,6 @@ const Cart = () => {
           <h1 className="text-3xl font-bold text-gray-900 mb-8">
             Shopping Cart
           </h1>
-
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Cart Items */}
             <div className="lg:col-span-2 space-y-4">
@@ -432,7 +409,6 @@ const Cart = () => {
                           ₹{item.price}
                         </p>
 
-                        {/* Customization Details */}
                         {item.customization && (
                           <div className="mt-2 text-sm text-gray-600">
                             {item.customization.text && (
@@ -472,7 +448,6 @@ const Cart = () => {
                             )}
                           </button>
                         </div>
-
                         {/* Quantity Controls */}
                         <div className="flex items-center gap-2">
                           <button
@@ -509,7 +484,6 @@ const Cart = () => {
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
                 Order Summary
               </h2>
-
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between">
                   <span className="text-gray-600">
@@ -536,14 +510,14 @@ const Cart = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Tax</span>
                   <span className="font-medium">
-                    ${(getTotalPrice() * 0.08).toFixed(2)}
+                    ₹{(getTotalPrice() * 0.08).toFixed(2)}
                   </span>
                 </div>
                 <div className="border-t pt-3">
                   <div className="flex justify-between">
                     <span className="text-lg font-semibold">Total</span>
                     <span className="text-lg font-bold text-primary">
-                      ${(getTotalPrice() * 1.08).toFixed(2)}
+                      ₹{(getTotalPrice() * 1.08).toFixed(2)}
                     </span>
                   </div>
                 </div>

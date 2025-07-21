@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabaseClient"; // Your import
+import { supabase } from "@/lib/supabaseClient";
 
-const PHONEPE_PAY_URL = "http://localhost:3000/pay"; // Your Express/PhonePe backend POST/pay endpoint
+const PHONEPE_PAY_URL = "http://localhost:3000/pay";
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -20,7 +20,6 @@ const Checkout = () => {
 
   const [loading, setLoading] = useState(true);
   const [processingPayment, setProcessingPayment] = useState(false);
-  const [orderId, setOrderId] = useState(""); // Used for pre-creating orders
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -32,21 +31,19 @@ const Checkout = () => {
     zipCode: "",
   });
 
-  // Prefill user info
   useEffect(() => {
     if (user) {
       fetchUserProfile();
     }
   }, [user]);
 
-   const handleChange = (e) => {
-     setFormData((prev) => ({
-       ...prev,
-       [e.target.name]: e.target.value,
-     }));
-   };
+  const handleChange = (e) => {
+    setFormData((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+  };
 
-  // Fetch user profile
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
@@ -79,7 +76,6 @@ const Checkout = () => {
     }
   };
 
-  // Validate form
   const validateForm = () => {
     const required = [
       "firstName",
@@ -124,68 +120,84 @@ const Checkout = () => {
     return true;
   };
 
-  // Create order in Supabase BEFORE payment
-  const createOrderRow = async ({ paymentMethod, status }) => {
-    const subtotal = getTotalPrice();
-    const tax = subtotal * 0.08;
-    const total = subtotal + tax;
-    const totalPaise = Math.round(total * 100);
-
-    const orderData = {
-      user_id: user.id,
-      customer_id: user.id,
-      items: items.map((item) => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        image: item.image,
-        customization: item.customization || {},
-      })),
-      total_price: totalPaise, // paise/cents
-      amount: total,
-      status,
-      shipping_info: {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-        address: formData.address,
-        city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
-      },
-      delivery_info: {
-        method: "standard",
-        estimatedDays: 3 - 5,
-      },
-    };
-    const { data, error } = await supabase
-      .from("orders")
-      .insert([orderData])
-      .select()
-      .single();
-    if (error) throw new Error("Order creation failed: " + error.message);
-    return data;
-  };
-
-  // COD Payment handler (offline payment)
+  // COD: Insert order in DB immediately with correct user_id and customer_id
   const handleCODPayment = async () => {
     if (!validateForm()) return;
+    setProcessingPayment(true);
     try {
-      setProcessingPayment(true);
-      const order = await createOrderRow({
-        paymentMethod: "COD",
-        status: "confirmed",
-      });
+      // 1. Fetch customer's row for user_id
+      const { data: customer, error: customerError } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (customerError || !customer) {
+        toast({
+          title: "Profile Error",
+          description:
+            "Profile missing. Please complete your profile in Account settings.",
+          variant: "destructive",
+        });
+        setProcessingPayment(false);
+        return;
+      }
+
+      const subtotal = getTotalPrice();
+      const tax = subtotal * 0.08;
+      const total = subtotal + tax;
+      const totalPaise = Math.round(total * 100);
+
+      const orderData = {
+        user_id: user.id,
+        customer_id: customer.id,
+        items: items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image,
+          customization: item.customization || {},
+        })),
+        total_price: totalPaise,
+        amount: total,
+        status: "pending",
+        payment_status: "pending",
+        shipping_info: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          zipCode: formData.zipCode,
+        },
+        delivery_info: {
+          method: "standard",
+          estimatedDays: 3 - 5,
+        },
+        payment_method: "COD",
+        upi_reference: "",
+        transaction_id: "",
+      };
+
+      const { data, error } = await supabase
+        .from("orders")
+        .insert([orderData])
+        .select()
+        .single();
+
+      if (error) throw new Error("Order creation failed: " + error.message);
+
       toast({
         title: "Order Placed Successfully!",
-        description: `Order #${order.id.slice(
+        description: `Order #${data.id.slice(
           0,
           8
         )} has been placed. You'll pay on delivery.`,
       });
       clearCart();
-      navigate(`/order/${order.id}`);
+      navigate(`/order/${data.id}`);
     } catch (error) {
       toast({
         title: "Order Failed",
@@ -197,28 +209,40 @@ const Checkout = () => {
     }
   };
 
-  // *** PHONEPE ONLINE PAYMENT ***
+  // PG/PhonePe: send info to backend, not create order here
   const handlePayNow = async () => {
     if (!validateForm()) return;
     setProcessingPayment(true);
     try {
-      // 1. Create the order (pending)
-      const order = await createOrderRow({
-        paymentMethod: "PayNow",
-        status: "pending",
+      document.getElementById("pp-cart-items").value = JSON.stringify(
+        items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image,
+          customization: item.customization || {},
+        }))
+      );
+      document.getElementById("pp-shipping-info").value = JSON.stringify({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zipCode: formData.zipCode,
       });
-      setOrderId(order.id);
-
-      // 2. Set hidden form fields
-      document.getElementById("pp-order-id").value = order.id;
-      document.getElementById("pp-amount").value = order.total_price;
       document.getElementById("pp-customer-email").value = formData.email;
       document.getElementById("pp-customer-phone").value = formData.phone;
       document.getElementById(
         "pp-customer-name"
       ).value = `${formData.firstName} ${formData.lastName}`;
+      document.getElementById("pp-payment-method").value = "PayNow";
+      document.getElementById("pp-total-amount").value = Math.round(
+        getTotalPrice() * 1.08 * 100
+      );
 
-      // 3. Programmatic POST to Express backend, which redirects to PhonePe
       payFormRef.current.submit();
     } catch (err) {
       toast({
@@ -230,11 +254,6 @@ const Checkout = () => {
     }
   };
 
-
-  // On return from payment, check for status in redirect/callback page
-  // (not in this component; see "Order Success" bonus at the end)
-
-  // If no cart items, redirect to cart
   if (items.length === 0) {
     navigate("/cart");
     return null;
@@ -254,7 +273,6 @@ const Checkout = () => {
     );
   }
 
-  // Totals
   const subtotal = getTotalPrice();
   const tax = subtotal * 0.08;
   const total = subtotal + tax;
@@ -267,7 +285,6 @@ const Checkout = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Checkout Form */}
             <div className="space-y-8">
-              {/* User/contact fields */}
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
                   Contact Information
@@ -466,8 +483,7 @@ const Checkout = () => {
           </div>
         </div>
       </div>
-
-      {/* HIDDEN FORM for PhonePe payment (submits to Express backend) */}
+      {/* HIDDEN FORM for PhonePe payment */}
       <form
         ref={payFormRef}
         id="phonepe-pay-form"
@@ -475,12 +491,13 @@ const Checkout = () => {
         action={PHONEPE_PAY_URL}
         style={{ display: "none" }}
       >
-        <input type="hidden" id="pp-order-id" name="orderId" />
-        <input type="hidden" id="pp-amount" name="amount" />
+        <input type="hidden" id="pp-cart-items" name="cartItems" />
+        <input type="hidden" id="pp-shipping-info" name="shippingInfo" />
         <input type="hidden" id="pp-customer-email" name="customerEmail" />
         <input type="hidden" id="pp-customer-phone" name="customerPhone" />
         <input type="hidden" id="pp-customer-name" name="customerName" />
-        {/* Add more meta info as needed */}
+        <input type="hidden" id="pp-payment-method" name="paymentMethod" />
+        <input type="hidden" id="pp-total-amount" name="totalAmount" />
       </form>
     </Layout>
   );

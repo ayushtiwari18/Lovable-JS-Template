@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,60 +7,18 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft,
-  Package,
-  Clock,
   CheckCircle,
   XCircle,
+  Clock,
+  Package,
   Truck,
   MapPin,
+  Eye,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabaseClient";
 
-// Mock order data - in real app this would come from API
-const mockOrderDetails = {
-  "ORD-001": {
-    id: "ORD-001",
-    date: "2024-01-15",
-    status: "delivered",
-    total: 299.99,
-    subtotal: 249.99,
-    shipping: 15.0,
-    tax: 35.0,
-    trackingNumber: "TRK123456789",
-    estimatedDelivery: "2024-01-18",
-    actualDelivery: "2024-01-17",
-    shippingAddress: {
-      name: "John Doe",
-      street: "123 Main Street",
-      city: "New York",
-      state: "NY",
-      zip: "10001",
-      country: "USA",
-    },
-    items: [
-      {
-        id: 1,
-        name: "Golden Victory Trophy",
-        quantity: 1,
-        price: 199.99,
-        image: "/placeholder.svg",
-      },
-      {
-        id: 2,
-        name: "Silver Medal Set",
-        quantity: 2,
-        price: 50.0,
-        image: "/placeholder.svg",
-      },
-    ],
-    timeline: [
-      { status: "Order Placed", date: "2024-01-15", completed: true },
-      { status: "Processing", date: "2024-01-15", completed: true },
-      { status: "Shipped", date: "2024-01-16", completed: true },
-      { status: "Delivered", date: "2024-01-17", completed: true },
-    ],
-  },
-};
-
+// ----- Status helpers (no getStatusColor error!) -----
 const getStatusIcon = (status) => {
   switch (status) {
     case "delivered":
@@ -74,7 +33,6 @@ const getStatusIcon = (status) => {
       return <Clock className="h-4 w-4 text-gray-600" />;
   }
 };
-
 const getStatusColor = (status) => {
   switch (status) {
     case "delivered":
@@ -92,16 +50,47 @@ const getStatusColor = (status) => {
 
 export default function OrderDetail() {
   const { orderId } = useParams();
-  const order = mockOrderDetails[orderId];
+  const { user } = useAuth();
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!order) {
+  useEffect(() => {
+    if (!orderId || !user) return;
+    setLoading(true);
+    supabase
+      .from("orders")
+      .select("*")
+      .eq("id", orderId)
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data, error }) => {
+        setOrder(data || null);
+        setLoading(false);
+      });
+  }, [orderId, user]);
+
+  if (loading)
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8 text-center">
+          <div className="h-10" />
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <div className="mt-6 text-lg text-gray-600">
+            Loading order details...
+          </div>
+        </div>
+      </Layout>
+    );
+
+  if (!order)
     return (
       <Layout>
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-4xl mx-auto text-center">
             <h1 className="text-2xl font-bold mb-4">Order Not Found</h1>
             <p className="text-muted-foreground mb-6">
-              The order you're looking for doesn't exist.
+              The order you're looking for doesn't exist or you don't have
+              access.
             </p>
             <Link to="/my-orders">
               <Button>Back to Orders</Button>
@@ -110,7 +99,14 @@ export default function OrderDetail() {
         </div>
       </Layout>
     );
-  }
+
+  // Defensive: Ensure some deeply nested fields don't error
+  const shipping = order.shipping_info ?? {};
+  const delivery = order.delivery_info ?? {};
+  const orderItems = Array.isArray(order.items) ? order.items : [];
+  const orderCreated = order.created_at
+    ? new Date(order.created_at).toLocaleString()
+    : "—";
 
   return (
     <Layout>
@@ -124,16 +120,17 @@ export default function OrderDetail() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold">Order #{order.id}</h1>
-              <p className="text-muted-foreground">
-                Placed on {new Date(order.date).toLocaleDateString()}
-              </p>
+              <h1 className="text-3xl font-bold">
+                Order #{order.id.slice(0, 8)}
+              </h1>
+              <p className="text-muted-foreground">Placed on {orderCreated}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Order Status & Timeline */}
+            {/* Order Status & Items */}
             <div className="lg:col-span-2 space-y-6">
+              {/* Order status */}
               <Card>
                 <CardHeader>
                   <div className="flex justify-between items-center">
@@ -145,36 +142,32 @@ export default function OrderDetail() {
                       </div>
                     </Badge>
                   </div>
+                  <div className="mt-2 text-sm">
+                    Payment status:{" "}
+                    <span className="font-semibold">
+                      {order.payment_status}
+                    </span>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {order.timeline.map((step, index) => (
-                      <div
-                        key={step.status}
-                        className="flex items-center gap-3"
-                      >
-                        <div
-                          className={`w-3 h-3 rounded-full ${
-                            step.completed ? "bg-green-500" : "bg-gray-300"
-                          }`}
-                        />
-                        <div className="flex-1">
-                          <p
-                            className={`font-medium ${
-                              step.completed
-                                ? "text-foreground"
-                                : "text-muted-foreground"
-                            }`}
-                          >
-                            {step.status}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {step.date}
-                          </p>
+                  {order.status === "cancelled" ? (
+                    <div className="text-red-600 font-medium">
+                      This order was cancelled.
+                    </div>
+                  ) : (
+                    <div>
+                      {order.payment_method && (
+                        <div className="mb-2">
+                          <b>Payment Method:</b> {order.payment_method}
+                          {order.upi_reference && (
+                            <span className="ml-2 text-xs text-gray-500">
+                              (Ref: {order.upi_reference})
+                            </span>
+                          )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -185,13 +178,13 @@ export default function OrderDetail() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {order.items.map((item) => (
+                    {orderItems.map((item, idx) => (
                       <div
-                        key={item.id}
+                        key={idx}
                         className="flex items-center gap-4 py-3 border-b last:border-b-0"
                       >
                         <img
-                          src={item.image}
+                          src={item.image || "/placeholder.svg"}
                           alt={item.name}
                           className="w-16 h-16 object-cover rounded-md"
                         />
@@ -200,8 +193,34 @@ export default function OrderDetail() {
                           <p className="text-sm text-muted-foreground">
                             Quantity: {item.quantity}
                           </p>
+                          {item.customization &&
+                            Object.values(item.customization).some(
+                              (v) => v
+                            ) && (
+                              <div className="text-xs text-gray-600 mt-1">
+                                {item.customization.text && (
+                                  <div>Text: {item.customization.text}</div>
+                                )}
+                                {item.customization.color && (
+                                  <div>Color: {item.customization.color}</div>
+                                )}
+                                {item.customization.size && (
+                                  <div>Size: {item.customization.size}</div>
+                                )}
+                                {item.customization.uploadedImage && (
+                                  <div>
+                                    Image: {item.customization.uploadedImage}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                         </div>
-                        <p className="font-medium">${item.price}</p>
+                        <p className="font-medium">
+                          ₹
+                          {item.price?.toLocaleString
+                            ? item.price.toLocaleString()
+                            : item.price}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -209,7 +228,7 @@ export default function OrderDetail() {
               </Card>
             </div>
 
-            {/* Order Summary & Info */}
+            {/* Order Summary, Address, Tracking */}
             <div className="space-y-6">
               <Card>
                 <CardHeader>
@@ -218,20 +237,20 @@ export default function OrderDetail() {
                 <CardContent className="space-y-2">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
-                    <span>${order.subtotal}</span>
+                    <span>₹{(order.amount / 1.08).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Shipping</span>
-                    <span>${order.shipping}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Tax</span>
-                    <span>${order.tax}</span>
+                    <span>Tax (8%)</span>
+                    <span>
+                      ₹{(order.amount - order.amount / 1.08).toFixed(2)}
+                    </span>
                   </div>
                   <Separator />
                   <div className="flex justify-between font-bold text-lg">
-                    <span>Total</span>
-                    <span>${order.total}</span>
+                    <span>Total paid</span>
+                    <span>
+                      ₹{order.amount?.toLocaleString?.() ?? order.amount}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -245,18 +264,20 @@ export default function OrderDetail() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-sm space-y-1">
-                    <p className="font-medium">{order.shippingAddress.name}</p>
-                    <p>{order.shippingAddress.street}</p>
-                    <p>
-                      {order.shippingAddress.city},{" "}
-                      {order.shippingAddress.state} {order.shippingAddress.zip}
-                    </p>
-                    <p>{order.shippingAddress.country}</p>
+                    <div>
+                      <span className="font-medium">
+                        {shipping.firstName} {shipping.lastName}
+                      </span>
+                    </div>
+                    <div>{shipping.address}</div>
+                    <div>
+                      {shipping.city}, {shipping.state} {shipping.zipCode}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {order.trackingNumber && (
+              {delivery.trackingNumber && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -265,16 +286,19 @@ export default function OrderDetail() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm font-medium">Tracking Number:</p>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      {order.trackingNumber}
-                    </p>
-                    {order.status === "delivered" && order.actualDelivery && (
-                      <p className="text-sm text-green-600">
-                        Delivered on{" "}
-                        {new Date(order.actualDelivery).toLocaleDateString()}
-                      </p>
-                    )}
+                    <div className="text-sm font-medium">Tracking Number:</div>
+                    <div className="text-sm text-muted-foreground mb-2">
+                      {delivery.trackingNumber}
+                    </div>
+                    {order.status === "delivered" &&
+                      delivery.actualDelivery && (
+                        <div className="text-sm text-green-600">
+                          Delivered on{" "}
+                          {new Date(
+                            delivery.actualDelivery
+                          ).toLocaleDateString()}
+                        </div>
+                      )}
                   </CardContent>
                 </Card>
               )}
