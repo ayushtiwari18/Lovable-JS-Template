@@ -9,7 +9,7 @@ import { FavouritesProvider } from "@/contexts/FavouritesContext";
 import { PrivateRoute } from "@/contexts/PrivateRoute.jsx"; // adjust path as per your project
 import Index from "./pages/Index";
 import Shop from "./pages/Shop";
-import Category from "./pages/Category";
+import Category from "./pages/CategoryProducts";
 import ProductDetail from "./pages/ProductDetail";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
