@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: phonepe-payment-gateway
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PHONEPE_MERCHANT_ID
+        fromDatabase: 
+          name: phonepe-config
+          property: MERCHANT_ID
+      - key: PHONEPE_SALT_KEY
+        fromDatabase:
+          name: phonepe-config
+          property: SALT_KEY
+      - key: PHONEPE_SALT_INDEX
+        fromDatabase:
+          name: phonepe-config
+          property: SALT_INDEX

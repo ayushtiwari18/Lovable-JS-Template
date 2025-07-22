@@ -1,6 +1,7 @@
 const PhonePeService = require("../services/phonepeService");
 const { supabase } = require("../config/supabaseClient");
 const { validatePaymentRequest } = require("../utils/validators");
+const { getEnvironmentConfig } = require("../config/environment");
 
 const phonepeConfig = require("../config/phonepe");
 
@@ -229,30 +230,33 @@ class PaymentController {
     }
   }
 
+  // In renderOrderComplete method:
   static renderOrderComplete(req, res) {
     const { orderId } = req.query;
+    const { frontendUrl } = getEnvironmentConfig();
+
     console.log("Redirecting to frontend for order:", orderId);
 
     res.send(`
-      <html>
-        <head>
-          <title>Finalizing Order...</title>
-          <meta http-equiv="refresh" content="2;url=http://localhost:5173/order/${orderId}" />
-        </head>
-        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-          <h2>🎉 Payment Processing Complete!</h2>
-          <p>Redirecting you to your order confirmation...</p>
-          <a href="http://localhost:5173/order/${orderId}" style="color: blue; text-decoration: underline;">
-            Click here if not redirected automatically
-          </a>
-          <script>
-            setTimeout(function(){ 
-              window.location="http://localhost:5173/order/${orderId}"; 
-            }, 1500);
-          </script>
-        </body>
-      </html>
-    `);
+    <html>
+      <head>
+        <title>Finalizing Order...</title>
+        <meta http-equiv="refresh" content="2;url=${frontendUrl}/order/${orderId}" />
+      </head>
+      <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+        <h2>🎉 Payment Processing Complete!</h2>
+        <p>Redirecting you to your order confirmation...</p>
+        <a href="${frontendUrl}/order/${orderId}" style="color: blue; text-decoration: underline;">
+          Click here if not redirected automatically
+        </a>
+        <script>
+          setTimeout(function(){ 
+            window.location="${frontendUrl}/order/${orderId}"; 
+          }, 1500);
+        </script>
+      </body>
+    </html>
+  `);
   }
 
   static getHealthStatus(req, res) {

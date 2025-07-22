@@ -1,14 +1,33 @@
 require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
+const cors = require("cors");
 const path = require("path");
+const { getEnvironmentConfig } = require("./src/config/environment");
 
-console.log("✅ Starting server setup...");
+const { frontendUrl, isDevelopment } = getEnvironmentConfig();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-console.log("✅ Express app created");
+// CORS Configuration
+const corsOptions = {
+  origin: isDevelopment
+    ? [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:3001",
+      ]
+    : [frontendUrl, process.env.FRONTEND_URL],
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+};
+
+app.use(cors(corsOptions));
+
+// Rest of your middleware and routes...
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: false }));
