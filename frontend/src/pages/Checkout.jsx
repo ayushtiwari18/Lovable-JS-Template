@@ -9,7 +9,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
-const PHONEPE_PAY_URL = "http://localhost:3000/pay";
+// At the top of your Checkout.jsx
+const PHONEPE_PAY_URL =
+  process.env.NODE_ENV === "production"
+    ? "https://shrifal-handicrafts.onrender.com/pay" // Replace with your actual Render URL
+    : "http://localhost:3000/pay";
+
 
 const Checkout = () => {
   const navigate = useNavigate();
