@@ -70,7 +70,7 @@ export const Header = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="text-2xl font-bold text-primary">
-            Shrifal-Handicrafts
+            <img src="/shrifal.svg" alt="Shrifal-Handicrafts" className="h-20 inline-block" /> Shrifal-Handicrafts
           </Link>
 
           {/* Desktop Navigation */}

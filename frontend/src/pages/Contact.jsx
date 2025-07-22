@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Phone, MapPin, Clock } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient"; // Import your Supabase client
+
 
 const Contact = () => {
   const { toast } = useToast();
@@ -17,19 +19,56 @@ const Contact = () => {
     message: "",
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    toast({
-      title: "Message Sent!",
-      description: "Thank you for contacting us. We'll get back to you soon.",
-    });
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      subject: "",
-      message: "",
-    });
+
+    // Check if user is authenticated
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to submit your enquiry.",
+        variant: "destructive",
+      });
+      return; // Stop submission if not authenticated
+    }
+
+    // Proceed with insert (now secured by RLS on the server)
+    const { data, error } = await supabase
+      .from("messages") // Updated to match your table name
+      .insert([
+        {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          subject: formData.subject,
+          message: formData.message,
+        },
+      ]);
+
+    if (error) {
+      console.error("Supabase error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send your message. Please try again.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Message Sent!",
+        description: "Thank you for contacting us. We'll get back to you soon.",
+      });
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        subject: "",
+        message: "",
+      });
+    }
   };
 
   const handleChange = (e) => {
@@ -241,7 +280,7 @@ const Contact = () => {
         </div>
       </section>
 
-      {/* Google Maps Section */}
+      {/* Google Maps Section (Updated to Jabalpur location) */}
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
@@ -256,7 +295,7 @@ const Contact = () => {
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
               <div className="aspect-video w-full">
                 <iframe
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d193595.15830869428!2d-74.119763973046!3d40.69766374874431!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x89c24fa5d33f083b%3A0xc80b8f06e177fe62!2sNew%20York%2C%20NY%2C%20USA!5e0!3m2!1sen!2s!4v1635959220374!5m2!1sen!2s"
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3668.269938872838!2d79.9378834751482!3d23.167404079071!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3981b0f0f4a5b6b1%3A0x5f5b8d7f0b8b0b0!2sMain%20Rd%2C%20Kachiyana%2C%20Lordganj%2C%20Jabalpur%2C%20Madhya%20Pradesh%20482002%2C%20India!5e0!3m2!1sen!2sin!4v1721749999999!5m2!1sen!2sin"
                   width="100%"
                   height="100%"
                   style={{ border: 0 }}
@@ -273,7 +312,8 @@ const Contact = () => {
                       Trophy Tale Store
                     </h3>
                     <p className="text-gray-600">
-                      123 Creative Street, Artisan District, NY 10001
+                      Main Road, Kachiyana, Lordganj, Jabalpur, Madhya Pradesh
+                      482002
                     </p>
                   </div>
                   <Button variant="outline">Get Directions</Button>
