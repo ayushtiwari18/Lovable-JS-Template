@@ -38,6 +38,12 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 
+// PayNow configuration
+const PHONEPE_PAY_URL =
+  process.env.NODE_ENV === "production"
+    ? "https://shrifal-handicrafts.onrender.com/pay" // Replace with your actual Render URL
+    : "http://localhost:3000/pay";
+
 // ----- Status helpers -----
 const getStatusIcon = (status) => {
   switch (status?.toLowerCase()) {
@@ -108,9 +114,11 @@ export default function OrderDetail() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
   const [productsCache, setProductsCache] = useState(new Map());
   const [showInvoice, setShowInvoice] = useState(false);
+
   useEffect(() => {
     if (!orderId || !user) return;
     fetchOrder();
@@ -200,6 +208,55 @@ export default function OrderDetail() {
       });
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handlePayNow = async () => {
+    if (!order) return;
+
+    setProcessingPayment(true);
+
+    try {
+      const totalAmount = Math.round(Number(order.amount) * 100); // Convert to paise
+
+      // Create a form and submit to PhonePe
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = PHONEPE_PAY_URL;
+      form.style.display = "none";
+
+      // Add form fields
+      const fields = {
+        orderId: order.id,
+        amount: totalAmount,
+        customerEmail: order.shipping_info?.email || user.email,
+        customerPhone: order.shipping_info?.phone || "",
+        customerName:
+          `${order.shipping_info?.firstName || ""} ${
+            order.shipping_info?.lastName || ""
+          }`.trim() || user.name,
+      };
+
+      Object.entries(fields).forEach(([key, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+    } catch (error) {
+      console.error("PayNow failed:", error);
+      toast({
+        title: "Payment Error",
+        description:
+          error.message || "Failed to initiate payment. Please try again.",
+        variant: "destructive",
+      });
+      setProcessingPayment(false);
     }
   };
 
@@ -387,6 +444,48 @@ export default function OrderDetail() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Payment Reminder Banner - Only for pending payments */}
+            {order.payment_status === "pending" && (
+              <Card className="border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50 mb-6 sm:mb-8">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-orange-100 rounded-full">
+                        <AlertCircle className="h-5 w-5 text-orange-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-orange-900 text-sm sm:text-base">
+                          Payment Pending
+                        </h3>
+                        <p className="text-xs sm:text-sm text-orange-700">
+                          Complete your payment to confirm this order
+                        </p>
+                      </div>
+                    </div>
+                    <div className="sm:ml-auto">
+                      <Button
+                        onClick={handlePayNow}
+                        disabled={processingPayment}
+                        className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700"
+                      >
+                        {processingPayment ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Pay ₹{Number(order.amount)?.toLocaleString() || "0"}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
               {/* Left Column - Order Items and Status */}
@@ -847,13 +946,39 @@ export default function OrderDetail() {
                 <Card className="border border-gray-200">
                   <CardContent className="p-4 sm:p-6">
                     <div className="space-y-3">
-                      {order.status === "delivered" && (
-                        <Button className="w-full" size="lg">
-                          <Star className="h-4 w-4 mr-2" />
-                          Rate This Order
+                      {/* Pay Now Button for Pending Payments */}
+                      {order.payment_status === "pending" && (
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          onClick={handlePayNow}
+                          disabled={processingPayment}
+                        >
+                          {processingPayment ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="h-4 w-4 mr-2" />
+                              Pay Now - ₹
+                              {Number(order.amount)?.toLocaleString() || "0"}
+                            </>
+                          )}
                         </Button>
                       )}
 
+                      {/* Rate Order Button for Delivered Orders */}
+                      {order.status === "delivered" &&
+                        order.payment_status !== "pending" && (
+                          <Button className="w-full" size="lg">
+                            <Star className="h-4 w-4 mr-2" />
+                            Rate This Order
+                          </Button>
+                        )}
+
+                      {/* Track Package Button for Shipped Orders */}
                       {order.status === "shipped" &&
                         delivery.trackingNumber && (
                           <Button
@@ -866,15 +991,31 @@ export default function OrderDetail() {
                           </Button>
                         )}
 
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        size="lg"
-                        onClick={() => setShowInvoice(true)}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        Download Invoice
-                      </Button>
+                      {/* Download Invoice Button - Always available except for pending payments */}
+                      {order.payment_status !== "pending" && (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          size="lg"
+                          onClick={() => setShowInvoice(true)}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Download Invoice
+                        </Button>
+                      )}
+
+                      {/* View Order Details - Alternative action for pending payments */}
+                      {order.payment_status === "pending" && (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          size="lg"
+                          onClick={() => setShowInvoice(true)}
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          View Order Summary
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

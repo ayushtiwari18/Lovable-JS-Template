@@ -12,6 +12,7 @@ import {
   FileText,
   Shield,
   Settings,
+  LayoutDashboard, // ADDED: Icon for the admin button
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -68,7 +69,7 @@ export const Header = () => {
     <header className="bg-white shadow-sm sticky top-0 z-50">
       <div className="container mx-auto px-3 sm:px-4 lg:px-6 xl:px-8">
         <div className="flex items-center justify-between h-14 sm:h-16 lg:h-18">
-          {/* Logo - Responsive sizing */}
+          {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
             <img
               src="/shrifal.svg"
@@ -80,7 +81,7 @@ export const Header = () => {
             </span>
           </Link>
 
-          {/* Desktop Navigation - Hidden on mobile and small tablets */}
+          {/* Desktop Navigation */}
           <nav className="hidden lg:flex space-x-6 xl:space-x-8">
             <Link
               to="/"
@@ -108,9 +109,23 @@ export const Header = () => {
             </Link>
           </nav>
 
-          {/* Right side icons - Responsive spacing and sizing */}
+          {/* Right side icons */}
           <div className="flex items-center space-x-2 sm:space-x-3 lg:space-x-4">
-            {/* User Menu - Hidden on mobile, visible on tablets and up */}
+            {/* ADDED: Admin Dashboard Button (Desktop) */}
+            {user && user.role === "admin" && (
+              <Link to="/admin" className="hidden md:block">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center text-sm lg:text-base"
+                >
+                  <LayoutDashboard className="h-4 w-4 mr-1" />
+                  Admin
+                </Button>
+              </Link>
+            )}
+
+            {/* User Menu / Login */}
             {user ? (
               <div className="hidden md:flex">
                 <DropdownMenu>
@@ -200,7 +215,7 @@ export const Header = () => {
               </Link>
             )}
 
-            {/* Cart - Responsive sizing */}
+            {/* Cart */}
             <Link to="/cart" className="relative">
               <Button variant="ghost" size="sm" className="relative p-2">
                 <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -212,7 +227,7 @@ export const Header = () => {
               </Button>
             </Link>
 
-            {/* Mobile menu button - Enhanced responsiveness */}
+            {/* Mobile menu button */}
             <Button
               variant="ghost"
               size="sm"
@@ -228,7 +243,7 @@ export const Header = () => {
           </div>
         </div>
 
-        {/* Mobile Navigation - Enhanced for better mobile experience */}
+        {/* Mobile Navigation */}
         {isMenuOpen && (
           <div className="lg:hidden border-t border-gray-200 py-3 sm:py-4 bg-white">
             <nav className="flex flex-col space-y-3 sm:space-y-4">
@@ -282,67 +297,86 @@ export const Header = () => {
                     </div>
                   </div>
 
-                  {/* User Menu Items */}
-                  <button
-                    onClick={() => {
-                      handleMyOrders();
-                      setIsMenuOpen(false);
-                    }}
-                    className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1 text-left"
-                  >
-                    <Package className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
-                    <span className="text-sm sm:text-base">My Orders</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleFavourites();
-                      setIsMenuOpen(false);
-                    }}
-                    className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1 text-left"
-                  >
-                    <Heart className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
-                    <span className="text-sm sm:text-base">Favourites</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      handlePersonalDetails();
-                      setIsMenuOpen(false);
-                    }}
-                    className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1 text-left"
-                  >
-                    <Settings className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
-                    <span className="text-sm sm:text-base">
-                      Personal Details
-                    </span>
-                  </button>
-                  <Link
-                    to="/terms-conditions"
-                    className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    <FileText className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
-                    <span className="text-sm sm:text-base">
-                      Terms & Conditions
-                    </span>
-                  </Link>
-                  <Link
-                    to="/privacy-policy"
-                    className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    <Shield className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
-                    <span className="text-sm sm:text-base">Privacy Policy</span>
-                  </Link>
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setIsMenuOpen(false);
-                    }}
-                    className="flex items-center text-red-600 hover:text-red-700 transition-colors py-2 px-1 text-left border-t border-gray-200 mt-2 pt-4"
-                  >
-                    <LogOut className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
-                    <span className="text-sm sm:text-base">Logout</span>
-                  </button>
+                  {/* MODIFIED: User Menu Items Wrapper */}
+                  <div className="flex flex-col space-y-3 border-t border-gray-200 pt-3">
+                    {/* ADDED: Admin Dashboard Link (Mobile) */}
+                    {user.role === "admin" && (
+                      <Link
+                        to="/admin"
+                        className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <LayoutDashboard className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
+                        <span className="text-sm sm:text-base font-medium">
+                          Admin Dashboard
+                        </span>
+                      </Link>
+                    )}
+
+                    {/* Regular user menu items */}
+                    <button
+                      onClick={() => {
+                        handleMyOrders();
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1 text-left"
+                    >
+                      <Package className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
+                      <span className="text-sm sm:text-base">My Orders</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleFavourites();
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1 text-left"
+                    >
+                      <Heart className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
+                      <span className="text-sm sm:text-base">Favourites</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handlePersonalDetails();
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1 text-left"
+                    >
+                      <Settings className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
+                      <span className="text-sm sm:text-base">
+                        Personal Details
+                      </span>
+                    </button>
+                    <Link
+                      to="/terms-conditions"
+                      className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <FileText className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
+                      <span className="text-sm sm:text-base">
+                        Terms & Conditions
+                      </span>
+                    </Link>
+                    <Link
+                      to="/privacy-policy"
+                      className="flex items-center text-gray-700 hover:text-primary transition-colors py-2 px-1"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <Shield className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
+                      <span className="text-sm sm:text-base">
+                        Privacy Policy
+                      </span>
+                    </Link>
+                    <button
+                      onClick={() => {
+                        handleLogout();
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex items-center text-red-600 hover:text-red-700 transition-colors py-2 px-1 text-left border-t border-gray-200 mt-2 pt-4"
+                    >
+                      <LogOut className="h-4 w-4 sm:h-5 sm:w-5 mr-3" />
+                      <span className="text-sm sm:text-base">Logout</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <Link
