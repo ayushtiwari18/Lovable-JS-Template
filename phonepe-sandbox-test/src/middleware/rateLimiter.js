@@ -1,5 +1,6 @@
 const rateLimit = require("express-rate-limit");
 const RedisStore = require("rate-limit-redis");
+const router = express.Router();
 // const { createClient } = require("redis");
 const logger = require("../utils/logger");
 const config = require("../config/environment");
@@ -13,22 +14,10 @@ class RateLimiterMiddleware {
 
   async initRedis() {
     try {
-      if (config.redis.url) {
-        this.redisClient = createClient({
-          url: config.redis.url,
-          password: config.redis.password,
-        });
-
-        await this.redisClient.connect();
-        logger.info("Redis connected for rate limiting");
-      }
+      router.use(rateLimiter.uploadLimiter());
     } catch (error) {
-      logger.warn(
-        "Redis connection failed, using memory store for rate limiting",
-        {
-          error: error.message,
-        }
-      );
+      console.log("Rate limiter error:", error);
+      console.log("Rate limiter not available, skipping...");
     }
   }
 

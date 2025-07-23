@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import ImageUpload from "@/components/ImageUpload.jsx"; // components\ImageUpload.jsx
+import ImageUpload from "@/components/ImageUpload.jsx";
 import { useToast } from "@/hooks/use-toast";
 
 // --- AddCategoryForm ---
@@ -28,7 +28,7 @@ export function AddCategoryForm({ onSubmit, onCancel }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (name.trim() && slug.trim()) {
-      onSubmit({ name, slug, price, image });
+      onSubmit({ name, slug, price, image: imageUrl }); // Fixed: use imageUrl
     } else {
       toast({
         title: "Validation Error",
@@ -77,9 +77,9 @@ export function AddCategoryForm({ onSubmit, onCancel }) {
         </div>
         <div>
           <Label>Image</Label>
-          {image && (
+          {imageUrl && ( // Fixed: use imageUrl
             <img
-              src={image}
+              src={imageUrl} // Fixed: use imageUrl
               alt="Category image"
               style={{
                 width: 100,
@@ -143,7 +143,7 @@ export function EditCategoryForm({ category, onSubmit, onCancel }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (name.trim() && slug.trim()) {
-      onSubmit({ name, slug, price, image });
+      onSubmit({ name, slug, price, image: imageUrl }); // Fixed: use imageUrl
     } else {
       toast({
         title: "Validation Error",
