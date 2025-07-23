@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
+import { useToast } from "@/hooks/use-toast";
+
 import {
   Package,
   Clock,
@@ -26,6 +28,10 @@ import {
   Tags,
   Wrench,
 } from "lucide-react";
+
+const { toast } = useToast();
+
+
 
 const getStatusIcon = (status) => {
   switch (status?.toLowerCase()) {
@@ -124,13 +130,21 @@ export default function MyOrders() {
   const [productsCache, setProductsCache] = useState(new Map());
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      console.log("No user found"); // Debug log
+      return;
+    }
+
+    console.log("Loading orders for user:", user.id); // Debug log
     loadOrders();
   }, [user]);
 
   const loadOrders = async () => {
     try {
       setLoading(true);
+
+      console.log("User:", user); // Debug log
+      console.log("Supabase URL:", import.meta.env.VITE_SUPABASE_URL); // Debug log
 
       // Fetch orders
       const { data: ordersData, error: ordersError } = await supabase
@@ -139,7 +153,12 @@ export default function MyOrders() {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      if (ordersError) throw ordersError;
+      console.log("Orders query result:", { ordersData, ordersError }); // Debug log
+
+      if (ordersError) {
+        console.error("Supabase error:", ordersError);
+        throw ordersError;
+      }
 
       if (ordersData && ordersData.length > 0) {
         // Extract all unique product IDs from orders
@@ -151,13 +170,14 @@ export default function MyOrders() {
               if (item.id) productIds.add(item.id);
             });
           }
-          // Also check catalog_items if it exists
           if (order.catalog_items && Array.isArray(order.catalog_items)) {
             order.catalog_items.forEach((item) => {
               if (item.id) productIds.add(item.id);
             });
           }
         });
+
+        console.log("Product IDs to fetch:", Array.from(productIds)); // Debug log
 
         // Fetch product details for all unique IDs
         if (productIds.size > 0) {
@@ -166,8 +186,12 @@ export default function MyOrders() {
             .select("*")
             .in("id", Array.from(productIds));
 
+          console.log("Products query result:", {
+            productsData,
+            productsError,
+          }); // Debug log
+
           if (!productsError && productsData) {
-            // Create a cache map for quick product lookup
             const cache = new Map();
             productsData.forEach((product) => {
               cache.set(product.id, product);
@@ -180,6 +204,13 @@ export default function MyOrders() {
       setOrders(ordersData || []);
     } catch (error) {
       console.error("Error loading orders:", error);
+
+      // Add toast notification for debugging
+      toast({
+        title: "Debug Info",
+        description: `Error: ${error.message || "Unknown error"}`,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
