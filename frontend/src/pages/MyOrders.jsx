@@ -29,7 +29,7 @@ import {
   Wrench,
 } from "lucide-react";
 
-const { toast } = useToast();
+
 
 
 
@@ -123,6 +123,7 @@ const getEstimatedArrival = (createdAt, status, estimatedDays = 7) => {
 };
 
 export default function MyOrders() {
+  const { toast } = useToast();
   const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
