@@ -27,6 +27,7 @@ import {
   Tag,
   Box,
   Palette,
+  Zap,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -265,8 +266,6 @@ const ImageGallery = ({ product, productImages }) => {
 
 // Fixed Product Variants Component
 const ProductVariants = ({ variants, selectedVariant, onVariantSelect }) => {
-
-  
   if (!variants || variants.length === 0) return null;
 
   return (
@@ -414,7 +413,7 @@ const DeliveryInfo = ({ estimatedDays = 7, codAllowed, bulkOrderAllowed }) => {
 const ProductDetail = () => {
   const { slug, productId } = useParams();
   const navigate = useNavigate();
-  const { addItem } = useCart();
+  const { addItem, clearCart } = useCart();
   const { addToFavourites, removeFromFavourites, isFavourite } =
     useFavourites();
   const { toast } = useToast();
@@ -555,7 +554,7 @@ const ProductDetail = () => {
     if (!product) return;
 
     const currentPrice = getCurrentPrice();
-    addItem({
+    const cartItem = {
       id: selectedVariant ? selectedVariant.id : product.id,
       productId: product.id,
       variantId: selectedVariant?.id,
@@ -574,12 +573,70 @@ const ProductDetail = () => {
         size: customization.size,
         uploadedImage: customization.uploadedImage?.name,
       },
-    });
+    };
+
+    addItem(cartItem);
 
     toast({
       title: "Added to Cart!",
       description: `${product.title} has been added to your cart.`,
     });
+
+    return cartItem;
+  };
+
+  const handleBuyNow = async () => {
+    if (!product) return;
+
+    try {
+      // Clear existing cart first
+      await clearCart();
+
+      // Add current product to cart
+      const currentPrice = getCurrentPrice();
+      const cartItem = {
+        id: selectedVariant ? selectedVariant.id : product.id,
+        productId: product.id,
+        variantId: selectedVariant?.id,
+        name: product.title,
+        price: currentPrice / 100,
+        image: product.image_url,
+        quantity: 1, // Default quantity for buy now
+        variant: selectedVariant
+          ? {
+              size: selectedVariant.size_label,
+              dimensions: formatDimensions(selectedVariant.dimensions),
+            }
+          : null,
+        customization: {
+          text: customization.text,
+          color: customization.color,
+          size: customization.size,
+          uploadedImage: customization.uploadedImage?.name,
+        },
+      };
+
+      // Add the item to cart
+      addItem(cartItem);
+
+      // Show toast notification
+      toast({
+        title: "Proceeding to Checkout",
+        description: `${product.title} added to cart. Redirecting to checkout...`,
+      });
+
+      // Small delay to ensure cart is updated, then navigate to checkout
+      setTimeout(() => {
+        navigate("/checkout");
+      }, 500);
+    } catch (error) {
+      console.error("Buy Now error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to proceed to checkout. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleToggleFavourite = () => {
@@ -859,7 +916,7 @@ const ProductDetail = () => {
                 </div>
               )}
 
-              {/* Customization Options
+              {/* Customization Options */}
               {(colorOptions.length > 0 ||
                 sizeOptions.length > 0 ||
                 product.is_customizable) && (
@@ -976,31 +1033,72 @@ const ProductDetail = () => {
                     </div>
                   </div>
                 </div>
-              )} */}
+              )}
 
-              {/* Action Buttons */}
-              <div className="flex gap-4 pt-6 border-t border-gray-200">
+              {/* Enhanced Action Buttons Section */}
+              <div className="space-y-4 pt-6 border-t border-gray-200">
+                {/* Buy Now Button - Primary CTA */}
                 <Button
-                  onClick={handleAddToCart}
-                  className="flex-1 h-14 text-lg font-semibold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary shadow-lg hover:shadow-xl transition-all duration-300"
+                  onClick={handleBuyNow}
+                  className="w-full h-16 text-xl font-bold bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]"
                   disabled={!getCurrentStock()}
                   size="lg"
                 >
-                  <ShoppingCart className="h-5 w-5 mr-2" />
-                  {getCurrentStock() ? "Add to Cart" : "Out of Stock"}
+                  <Zap className="h-6 w-6 mr-3" />
+                  {getCurrentStock()
+                    ? "Buy Now - Quick Checkout"
+                    : "Out of Stock"}
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleToggleFavourite}
-                  className="h-14 px-6 border-2 hover:scale-105 transition-transform duration-200"
-                  size="lg"
-                >
-                  <Heart
-                    className={`h-5 w-5 ${
-                      isFavourite(product.id) ? "text-red-500 fill-current" : ""
-                    }`}
-                  />
-                </Button>
+
+                {/* Secondary Actions Row */}
+                <div className="flex gap-4">
+                  <Button
+                    onClick={handleAddToCart}
+                    className="flex-1 h-14 text-lg font-semibold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary shadow-lg hover:shadow-xl transition-all duration-300"
+                    disabled={!getCurrentStock()}
+                    size="lg"
+                    variant="outline"
+                  >
+                    <ShoppingCart className="h-5 w-5 mr-2" />
+                    Add to Cart
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleToggleFavourite}
+                    className="h-14 px-6 border-2 hover:scale-105 transition-transform duration-200"
+                    size="lg"
+                  >
+                    <Heart
+                      className={`h-5 w-5 ${
+                        isFavourite(product.id)
+                          ? "text-red-500 fill-current"
+                          : ""
+                      }`}
+                    />
+                  </Button>
+                </div>
+
+                {/* Purchase Information */}
+                {getCurrentStock() && (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                    <div className="flex items-center text-sm text-green-800">
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      <span className="font-medium">
+                        Ready to ship • Buy Now for instant checkout
+                      </span>
+                    </div>
+                    <div className="mt-2 text-xs text-green-700">
+                      • Skip cart and go directly to payment
+                      <br />• Same secure checkout process
+                      {product.cod_allowed && (
+                        <>
+                          <br />• Cash on Delivery available
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Trust Badges */}
