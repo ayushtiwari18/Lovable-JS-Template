@@ -83,7 +83,7 @@ const ProductImage = ({ product, className }) => {
       <div
         className={`${className} bg-gradient-to-br from-primary/10 to-primary/5 flex flex-col items-center justify-center group-hover:from-primary/15 group-hover:to-primary/10 transition-all duration-300`}
       >
-        <ShoppingBag className="h-16 w-16 text-primary group-hover:scale-110 transition-transform duration-300" />
+        <ShoppingBag className="h-12 w-12 sm:h-16 sm:w-16 text-primary group-hover:scale-110 transition-transform duration-300" />
         <span className="text-xs text-primary/70 mt-2 font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-center px-2">
           {product.title?.slice(0, 20) || "Product"}
         </span>
@@ -96,7 +96,7 @@ const ProductImage = ({ product, className }) => {
       {/* Loading skeleton */}
       {imageState === "loading" && (
         <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse flex items-center justify-center">
-          <ShoppingBag className="h-12 w-12 text-gray-400" />
+          <ShoppingBag className="h-8 w-8 sm:h-12 sm:w-12 text-gray-400" />
         </div>
       )}
 
@@ -196,8 +196,15 @@ export const FeaturedProducts = () => {
     }
   };
 
+  // Format price to Indian currency
   const formatPrice = (priceInCents) => {
-    return (priceInCents / 100).toFixed(2);
+    const price = priceInCents / 100;
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(price);
   };
 
   const isNewProduct = (createdAt) => {
@@ -208,27 +215,27 @@ export const FeaturedProducts = () => {
 
   // Enhanced loading skeleton
   const LoadingSkeleton = () => (
-    <section className="py-20 bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <div className="h-10 bg-gray-200 rounded-lg w-80 mx-auto mb-4 animate-pulse"></div>
-          <div className="h-6 bg-gray-200 rounded-lg w-96 mx-auto animate-pulse"></div>
+    <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-12 sm:mb-16">
+          <div className="h-8 sm:h-10 bg-gray-200 rounded-lg w-60 sm:w-80 mx-auto mb-4 animate-pulse"></div>
+          <div className="h-5 sm:h-6 bg-gray-200 rounded-lg w-80 sm:w-96 mx-auto animate-pulse"></div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
           {[...Array(8)].map((_, index) => (
             <div
               key={index}
-              className="bg-white rounded-2xl shadow-lg overflow-hidden"
+              className="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden"
             >
               <div className="aspect-square bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse flex items-center justify-center">
-                <ShoppingBag className="h-12 w-12 text-gray-400" />
+                <ShoppingBag className="h-8 w-8 sm:h-12 sm:w-12 text-gray-400" />
               </div>
-              <div className="p-6">
-                <div className="h-4 bg-gray-200 rounded w-20 mb-2 animate-pulse"></div>
-                <div className="h-6 bg-gray-200 rounded w-full mb-4 animate-pulse"></div>
+              <div className="p-4 sm:p-6">
+                <div className="h-3 sm:h-4 bg-gray-200 rounded w-16 sm:w-20 mb-2 animate-pulse"></div>
+                <div className="h-5 sm:h-6 bg-gray-200 rounded w-full mb-4 animate-pulse"></div>
                 <div className="flex justify-between items-center">
-                  <div className="h-8 bg-gray-200 rounded w-16 animate-pulse"></div>
-                  <div className="h-9 bg-gray-200 rounded w-24 animate-pulse"></div>
+                  <div className="h-6 sm:h-8 bg-gray-200 rounded w-14 sm:w-16 animate-pulse"></div>
+                  <div className="h-8 sm:h-9 bg-gray-200 rounded w-20 sm:w-24 animate-pulse"></div>
                 </div>
               </div>
             </div>
@@ -242,19 +249,20 @@ export const FeaturedProducts = () => {
 
   if (error) {
     return (
-      <section className="py-20 bg-gradient-to-br from-red-50 to-gray-50">
-        <div className="container mx-auto px-4">
-          <div className="text-center bg-white rounded-2xl shadow-lg p-8 max-w-md mx-auto">
-            <div className="bg-gradient-to-br from-red-100 to-red-200 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ImageOff className="h-8 w-8 text-red-500" />
+      <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-red-50 to-gray-50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center bg-white rounded-xl sm:rounded-2xl shadow-lg p-6 sm:p-8 max-w-sm sm:max-w-md mx-auto">
+            <div className="bg-gradient-to-br from-red-100 to-red-200 w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ImageOff className="h-6 w-6 sm:h-8 sm:w-8 text-red-500" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
               Oops! Something went wrong
             </h3>
-            <p className="text-red-600 mb-4">{error}</p>
+            <p className="text-red-600 mb-4 text-sm sm:text-base">{error}</p>
             <Button
               onClick={() => window.location.reload()}
               variant="outline"
+              size="sm"
               className="border-red-200 text-red-600 hover:bg-red-50"
             >
               Try Again
@@ -267,20 +275,22 @@ export const FeaturedProducts = () => {
 
   if (featuredProducts.length === 0) {
     return (
-      <section className="py-20 bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="container mx-auto px-4">
-          <div className="text-center bg-white rounded-2xl shadow-lg p-12 max-w-md mx-auto">
-            <div className="bg-gradient-to-br from-primary/10 to-primary/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="h-8 w-8 text-primary" />
+      <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center bg-white rounded-xl sm:rounded-2xl shadow-lg p-8 sm:p-12 max-w-sm sm:max-w-md mx-auto">
+            <div className="bg-gradient-to-br from-primary/10 to-primary/20 w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
               No Featured Products Yet
             </h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-6 text-sm sm:text-base">
               We're working on adding amazing products for you!
             </p>
             <Link to="/shop">
-              <Button variant="outline">Browse All Products</Button>
+              <Button variant="outline" size="sm" className="sm:text-base">
+                Browse All Products
+              </Button>
             </Link>
           </div>
         </div>
@@ -289,45 +299,45 @@ export const FeaturedProducts = () => {
   }
 
   return (
-    <section className="py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      <div className="container mx-auto px-4">
+    <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Enhanced Header */}
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center bg-primary/10 rounded-full px-4 py-2 mb-4">
-            <Sparkles className="h-4 w-4 text-primary mr-2" />
-            <span className="text-sm font-medium text-primary">
+        <div className="text-center mb-12 sm:mb-16">
+          <div className="inline-flex items-center bg-primary/10 rounded-full px-3 py-1.5 sm:px-4 sm:py-2 mb-4">
+            <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 text-primary mr-2" />
+            <span className="text-xs sm:text-sm font-medium text-primary">
               Featured Collection
             </span>
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4 bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent leading-tight">
             Featured Products
           </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-lg lg:text-xl text-gray-600 max-w-xl lg:max-w-2xl mx-auto leading-relaxed px-4">
             Check out our most popular items, loved by customers for their
             quality and personalization options.
           </p>
         </div>
 
         {/* Products Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
           {featuredProducts.map((product) => (
             <div
               key={product.id}
-              className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group relative border border-gray-100 hover:-translate-y-1"
+              className="bg-white rounded-xl sm:rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group relative border border-gray-100 hover:-translate-y-1"
             >
               {/* Image Container */}
               <div className="relative aspect-square bg-gray-50 overflow-hidden">
                 <ProductImage product={product} className="w-full h-full" />
 
                 {/* Badges */}
-                <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+                <div className="absolute top-2 sm:top-4 left-2 sm:left-4 flex flex-col gap-1 sm:gap-2 z-10">
                   {isNewProduct(product.created_at) && (
-                    <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
+                    <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-semibold shadow-lg">
                       New
                     </span>
                   )}
                   {!product.in_stock && (
-                    <span className="bg-gradient-to-r from-red-500 to-red-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
+                    <span className="bg-gradient-to-r from-red-500 to-red-600 text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-semibold shadow-lg">
                       Sold Out
                     </span>
                   )}
@@ -336,10 +346,10 @@ export const FeaturedProducts = () => {
                 {/* Favourite Button */}
                 <button
                   onClick={() => handleToggleFavourite(product)}
-                  className="absolute top-4 right-4 p-2.5 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white hover:scale-110 transition-all duration-200 group/fav z-10"
+                  className="absolute top-2 sm:top-4 right-2 sm:right-4 p-1.5 sm:p-2.5 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white hover:scale-110 transition-all duration-200 group/fav z-10"
                 >
                   <Heart
-                    className={`h-4 w-4 transition-colors duration-200 ${
+                    className={`h-3 w-3 sm:h-4 sm:w-4 transition-colors duration-200 ${
                       isFavourite(product.id)
                         ? "text-red-500 fill-current"
                         : "text-gray-600 group-hover/fav:text-red-400"
@@ -349,15 +359,15 @@ export const FeaturedProducts = () => {
               </div>
 
               {/* Content */}
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 {/* Category & Rating */}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full">
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                  <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full truncate max-w-[120px] sm:max-w-none">
                     {product.category_name}
                   </span>
                   {product.category_rating && (
-                    <div className="flex items-center bg-yellow-50 px-2 py-1 rounded-full">
-                      <Star className="h-3 w-3 text-yellow-500 fill-current" />
+                    <div className="flex items-center bg-yellow-50 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full">
+                      <Star className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-yellow-500 fill-current" />
                       <span className="text-xs text-yellow-700 ml-1 font-medium">
                         {product.category_rating}
                       </span>
@@ -366,38 +376,43 @@ export const FeaturedProducts = () => {
                 </div>
 
                 {/* Title */}
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 line-clamp-2 leading-tight group-hover:text-primary transition-colors duration-200">
+                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 line-clamp-2 leading-tight group-hover:text-primary transition-colors duration-200">
                   {product.title}
                 </h3>
 
                 {/* Price & Action */}
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-2xl font-bold text-primary">
-                      ${formatPrice(product.price)}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-lg sm:text-xl lg:text-2xl font-bold text-primary truncate">
+                      {formatPrice(product.price)}
                     </span>
                     {product.original_price &&
                       product.original_price > product.price && (
-                        <span className="text-sm text-gray-500 line-through">
-                          ${formatPrice(product.original_price)}
+                        <span className="text-xs sm:text-sm text-gray-500 line-through truncate">
+                          {formatPrice(product.original_price)}
                         </span>
                       )}
                   </div>
 
                   <Link
                     to={`/category/${product.category_slug}/products/${product.id}`}
-                    className="group/link"
+                    className="group/link shrink-0"
                   >
                     <Button
                       size="sm"
                       disabled={!product.in_stock}
-                      className={`transition-all duration-200 ${
+                      className={`text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 transition-all duration-200 ${
                         product.in_stock
                           ? "hover:shadow-lg hover:-translate-y-0.5"
                           : "opacity-50 cursor-not-allowed"
                       }`}
                     >
-                      {product.in_stock ? "View Details" : "Out of Stock"}
+                      <span className="hidden sm:inline">
+                        {product.in_stock ? "View Details" : "Out of Stock"}
+                      </span>
+                      <span className="sm:hidden">
+                        {product.in_stock ? "View" : "Sold"}
+                      </span>
                     </Button>
                   </Link>
                 </div>
@@ -407,18 +422,18 @@ export const FeaturedProducts = () => {
         </div>
 
         {/* Call to Action */}
-        <div className="text-center mt-16">
+        <div className="text-center mt-12 sm:mt-16">
           <div className="inline-flex flex-col items-center">
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 mb-4 text-sm sm:text-base px-4">
               Discover more amazing products in our collection
             </p>
             <Link to="/shop">
               <Button
                 size="lg"
                 variant="outline"
-                className="border-2 hover:border-primary hover:bg-primary hover:text-white transition-all duration-300 px-8 py-3"
+                className="border-2 hover:border-primary hover:bg-primary hover:text-white transition-all duration-300 px-6 sm:px-8 py-2 sm:py-3 text-sm sm:text-base"
               >
-                <Package className="h-4 w-4 mr-2" />
+                <Package className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
                 View All Products
               </Button>
             </Link>

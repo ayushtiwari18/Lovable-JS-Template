@@ -197,6 +197,7 @@ const Checkout = () => {
         order_notes: null,
       };
 
+      // Insert with immediate verification
       const { data, error } = await supabase
         .from("orders")
         .insert([orderData])
@@ -208,8 +209,20 @@ const Checkout = () => {
         throw new Error(`Database error: ${error.message}`);
       }
 
-      console.log("✅ Order created:", data);
-      return data;
+      // VERIFY the order was created by fetching it back
+      const { data: verifyOrder, error: verifyError } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("id", data.id)
+        .single();
+
+      if (verifyError || !verifyOrder) {
+        console.error("❌ Order verification failed:", verifyError);
+        throw new Error("Order creation verification failed");
+      }
+
+      console.log("✅ Order created and verified:", verifyOrder);
+      return verifyOrder;
     } catch (error) {
       console.error("🚨 CREATE ORDER FAILED:", error);
       throw error;
@@ -270,6 +283,9 @@ const Checkout = () => {
       // Create order in database first
       const order = await createOrder("PayNow");
 
+      // Add a small delay to ensure database consistency
+      // await new Promise((resolve) => setTimeout(resolve, 1000));
+
       // Clear cart immediately after order creation
       console.log("🧹 Clearing cart before PhonePe redirect...");
       await clearCart();
@@ -300,7 +316,7 @@ const Checkout = () => {
         zipCode: formData.zipCode,
       });
 
-      // Submit form to PhonePe
+      // Submit to PhonePe
       payFormRef.current.submit();
     } catch (error) {
       console.error("PayNow failed:", error);
