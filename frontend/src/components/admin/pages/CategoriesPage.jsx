@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -7,7 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -20,87 +19,116 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus, Edit, Trash2, Package } from "lucide-react";
-import { CategoryForm } from "../forms/CategoryForm";
+import { AddCategoryForm, EditCategoryForm } from "../forms/CategoryForm";
 import { useToast } from "@/hooks/use-toast";
-
-const initialCategories = [
-  {
-    id: 1,
-    name: "Awards",
-    description: "Premium awards and trophies",
-    products: 25,
-    status: "active",
-  },
-  {
-    id: 2,
-    name: "Medals",
-    description: "Competition medals and ribbons",
-    products: 18,
-    status: "active",
-  },
-  {
-    id: 3,
-    name: "Plaques",
-    description: "Recognition plaques and certificates",
-    products: 12,
-    status: "active",
-  },
-  {
-    id: 4,
-    name: "Cups",
-    description: "Trophy cups and chalices",
-    products: 8,
-    status: "inactive",
-  },
-  {
-    id: 5,
-    name: "Figurines",
-    description: "Sport and achievement figurines",
-    products: 15,
-    status: "active",
-  },
-];
+import { supabase } from "@/lib/supabaseClient";
 
 export function CategoriesPage() {
-  const [categories, setCategories] = useState(initialCategories);
+  const [categories, setCategories] = useState([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState();
-  const [deleteCategory, setDeleteCategory] = useState();
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [deleteCategory, setDeleteCategory] = useState(null);
   const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
 
-  const handleCreate = (data) => {
-    const newCategory = {
-      ...data,
-      id: Math.max(...categories.map((c) => c.id)) + 1,
-      products: 0,
-    };
-    setCategories([...categories, newCategory]);
+  // Fetch categories (including image, price)
+  useEffect(() => {
+    async function fetchCategories() {
+      setLoading(true);
+      const { data, error } = await supabase.from("categories").select(`
+        id,
+        name,
+        slug,
+        image,
+        price,
+        products:products(id)
+      `);
+
+      if (error) {
+        toast({ title: "Failed to fetch categories", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+
+      const categoriesWithCount = data.map((category) => ({
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+        image: category.image,
+        price: category.price,
+        products: category.products ? category.products.length : 0,
+      }));
+
+      setCategories(categoriesWithCount);
+      setLoading(false);
+    }
+    fetchCategories();
+  }, [toast]);
+
+  // Create category handler
+  const handleCreate = async (data) => {
+    const { error, data: newCategory } = await supabase
+      .from("categories")
+      .insert([data])
+      .select()
+      .single();
+
+    if (error) {
+      toast({ title: "Failed to create category", variant: "destructive" });
+      return;
+    }
+
+    setCategories([...categories, { ...newCategory, products: 0 }]);
     setIsFormOpen(false);
     toast({ title: "Category created successfully" });
   };
 
-  const handleEdit = (data) => {
-    if (editingCategory) {
-      setCategories(
-        categories.map((c) =>
-          c.id === editingCategory.id ? { ...c, ...data } : c
-        )
-      );
-      setEditingCategory(undefined);
-      toast({ title: "Category updated successfully" });
+  // Edit category handler
+  const handleEdit = async (data) => {
+    if (!editingCategory) return;
+
+    const { error } = await supabase
+      .from("categories")
+      .update(data)
+      .eq("id", editingCategory.id);
+
+    if (error) {
+      toast({ title: "Failed to update category", variant: "destructive" });
+      return;
     }
+
+    setCategories(
+      categories.map((c) =>
+        c.id === editingCategory.id ? { ...c, ...data } : c
+      )
+    );
+    setEditingCategory(null);
+    setIsFormOpen(false);
+    toast({ title: "Category updated successfully" });
   };
 
-  const handleDelete = () => {
-    if (deleteCategory) {
-      setCategories(categories.filter((c) => c.id !== deleteCategory.id));
-      setDeleteCategory(undefined);
-      toast({ title: "Category deleted successfully" });
+  // Delete category handler
+  const handleDelete = async () => {
+    if (!deleteCategory) return;
+
+    const { error } = await supabase
+      .from("categories")
+      .delete()
+      .eq("id", deleteCategory.id);
+
+    if (error) {
+      toast({ title: "Failed to delete category", variant: "destructive" });
+      return;
     }
+
+    setCategories(categories.filter((c) => c.id !== deleteCategory.id));
+    setDeleteCategory(null);
+    toast({ title: "Category deleted successfully" });
   };
 
   return (
     <div className="space-y-6">
+      {/* Header and Add button */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Categories</h1>
@@ -109,7 +137,10 @@ export function CategoriesPage() {
           </p>
         </div>
         <Button
-          onClick={() => setIsFormOpen(true)}
+          onClick={() => {
+            setEditingCategory(null); // Clear editing state
+            setIsFormOpen(true); // Open dialog for add
+          }}
           className="bg-primary hover:bg-primary-hover text-primary-foreground"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -117,101 +148,126 @@ export function CategoriesPage() {
         </Button>
       </div>
 
+      {/* Categories list */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-card-foreground">
-            Categories List
-          </CardTitle>
+          <CardTitle>Categories List</CardTitle>
           <CardDescription>
             You have {categories.length} categories configured.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {categories.map((category) => (
-              <Card
-                key={category.id}
-                className="bg-surface-light border-border"
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <Package className="h-8 w-8 text-primary" />
-                    <Badge
-                      variant={
-                        category.status === "active" ? "default" : "secondary"
-                      }
-                      className={
-                        category.status === "active"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                          : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
-                      }
-                    >
-                      {category.status}
-                    </Badge>
-                  </div>
-                  <CardTitle className="text-lg text-foreground">
-                    {category.name}
-                  </CardTitle>
-                  <CardDescription className="text-sm">
-                    {category.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-2xl font-bold text-foreground">
-                        {category.products}
-                      </p>
-                      <p className="text-sm text-muted-foreground">Products</p>
+          {loading ? (
+            <p className="text-center py-10">Loading categories...</p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {categories.map((category) => (
+                <Card
+                  key={category.id}
+                  className="bg-surface-light border-border"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <Package className="h-8 w-8 text-primary" />
                     </div>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setEditingCategory(category)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => setDeleteCategory(category)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <CardTitle className="text-lg">{category.name}</CardTitle>
+                    <CardDescription className="text-sm">
+                      Slug: <span className="font-mono">{category.slug}</span>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {/* Image */}
+                    {category.image && (
+                      <div className="mb-3 flex justify-center">
+                        <img
+                          src={category.image}
+                          alt={category.name}
+                          style={{
+                            width: 96,
+                            height: 96,
+                            objectFit: "cover",
+                            borderRadius: 8,
+                            border: "1px solid #eee",
+                          }}
+                        />
+                      </div>
+                    )}
+                    {/* Price */}
+                    <div className="mb-2 text-lg font-semibold text-primary">
+                      {category.price ? `₹${category.price}` : "No price"}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-2xl font-bold">
+                          {category.products}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Products
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setEditingCategory(category);
+                            setIsFormOpen(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => setDeleteCategory(category)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Dialog for Add/Edit form */}
       <Dialog
-        open={isFormOpen || !!editingCategory}
-        onOpenChange={() => {
-          setIsFormOpen(false);
-          setEditingCategory(undefined);
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsFormOpen(false);
+            setEditingCategory(null);
+          }
         }}
       >
         <DialogContent>
-          <CategoryForm
-            category={editingCategory}
-            onSubmit={editingCategory ? handleEdit : handleCreate}
-            onCancel={() => {
-              setIsFormOpen(false);
-              setEditingCategory(undefined);
-            }}
-          />
+          {editingCategory ? (
+            <EditCategoryForm
+              category={editingCategory}
+              onSubmit={handleEdit}
+              onCancel={() => {
+                setIsFormOpen(false);
+                setEditingCategory(null);
+              }}
+            />
+          ) : (
+            <AddCategoryForm
+              onSubmit={handleCreate}
+              onCancel={() => setIsFormOpen(false)}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
+      {/* Delete confirmation alert */}
       <AlertDialog
         open={!!deleteCategory}
-        onOpenChange={() => setDeleteCategory(undefined)}
+        onOpenChange={() => setDeleteCategory(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>

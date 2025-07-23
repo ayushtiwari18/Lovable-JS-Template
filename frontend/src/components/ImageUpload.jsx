@@ -60,9 +60,9 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
       const formData = new FormData();
 
       if (maxFiles === 1) {
-        // Single image upload - matches your backend endpoint
+        // Single image upload - note changed endpoint matching backend
         formData.append("image", files[0]);
-        const response = await fetch("/api/upload/product", {
+        const response = await fetch("/api/upload/image", {
           method: "POST",
           body: formData,
         });
@@ -75,7 +75,8 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
         if (result.success) {
           const imageData = {
             ...result.data,
-            public_id: result.data.publicId, // Map publicId to public_id for consistency
+            public_id: result.data.cloudinaryPublicId, // use cloudinaryPublicId from backend
+            fileId: result.data.fileId, // DB record id for deletion
           };
 
           setUploadedImages([imageData]);
@@ -88,9 +89,9 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
           throw new Error(result.error || "Upload failed");
         }
       } else {
-        // Multiple images upload - matches your backend endpoint
+        // Multiple images upload - endpoint renamed to /api/upload/images per backend
         files.forEach((file) => formData.append("images", file));
-        const response = await fetch("/api/upload/products", {
+        const response = await fetch("/api/upload/images", {
           method: "POST",
           body: formData,
         });
@@ -103,7 +104,8 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
         if (result.success) {
           const imagesData = result.data.map((item) => ({
             ...item,
-            public_id: item.publicId, // Map publicId to public_id
+            public_id: item.cloudinaryPublicId,
+            fileId: item.fileId,
           }));
 
           setUploadedImages(imagesData);
@@ -130,10 +132,10 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
     }
   };
 
-  const removeImage = async (publicId) => {
+  // Delete must use DB fileId, not Cloudinary public ID
+  const removeImage = async (fileId) => {
     try {
-      // Updated to match your backend endpoint
-      const response = await fetch(`/api/upload/delete/${publicId}`, {
+      const response = await fetch(`/api/upload/file/${fileId}`, {
         method: "DELETE",
       });
 
@@ -144,7 +146,7 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
       const result = await response.json();
       if (result.success) {
         setUploadedImages((prev) =>
-          prev.filter((img) => img.public_id !== publicId)
+          prev.filter((img) => img.fileId !== fileId)
         );
 
         toast({
@@ -212,17 +214,17 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
       {uploadedImages.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {uploadedImages.map((image, index) => (
-            <div key={image.public_id || index} className="relative group">
+            <div key={image.fileId || index} className="relative group">
               <img
                 src={image.variations?.medium || image.url}
                 alt={`Upload ${index + 1}`}
                 className="w-full h-32 object-cover rounded-lg border shadow-sm"
                 onError={(e) => {
-                  e.target.src = image.url; // Fallback to original URL
+                  e.target.src = image.url; // Fallback if medium variation fails
                 }}
               />
               <button
-                onClick={() => removeImage(image.public_id || image.publicId)}
+                onClick={() => removeImage(image.fileId)}
                 className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                 title="Remove image"
               >

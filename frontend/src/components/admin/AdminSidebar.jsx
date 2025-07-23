@@ -46,10 +46,7 @@ const menuItems = [
   {
     title: "Categories",
     icon: FolderTree,
-    items: [
-      { title: "All Categories", url: "/admin/categories" },
-      { title: "Add Category", url: "/admin/categories/add" },
-    ],
+    url: "/admin/categories/add",
   },
   {
     title: "Orders",
