@@ -6,12 +6,7 @@ import {
   FolderTree,
   ShoppingCart,
   Users,
-  CreditCard,
-  Package2,
-  User,
   MessageSquare,
-  BarChart3,
-  FileImage,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -43,7 +38,7 @@ const menuItems = [
   {
     title: "Categories",
     icon: FolderTree,
-    url: "/admin/categories/add",
+    url: "/admin/categories",
   },
   {
     title: "Orders",
@@ -56,38 +51,9 @@ const menuItems = [
     icon: Users,
   },
   {
-    title: "Payments",
-    url: "/admin/payments",
-    icon: CreditCard,
-  },
-  {
-    title: "Inventory",
-    url: "/admin/inventory",
-    icon: Package2,
-  },
-  {
-    title: "Users",
-    url: "/admin/users",
-    icon: User,
-  },
-  {
     title: "Messages",
     url: "/admin/messages",
     icon: MessageSquare,
-  },
-  {
-    title: "Reports",
-    icon: BarChart3,
-    items: [
-      { title: "Sales Reports", url: "/admin/reports/sales" },
-      { title: "Customer Reports", url: "/admin/reports/customers" },
-      { title: "Product Reports", url: "/admin/reports/products" },
-    ],
-  },
-  {
-    title: "Media",
-    url: "/admin/media",
-    icon: FileImage,
   },
 ];
 
@@ -124,12 +90,12 @@ export function AdminSidebar() {
         <div className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-              TT
+              SH
             </div>
             {!collapsed && (
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-sidebar-foreground">
-                  Trophy Tale
+                  Shrifal Handicrafts
                 </span>
                 <span className="text-xs text-sidebar-foreground/70">
                   Admin Panel

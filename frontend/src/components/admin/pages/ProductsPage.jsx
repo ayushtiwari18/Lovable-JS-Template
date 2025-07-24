@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -21,17 +21,39 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  Package,
+  Filter,
+  Grid3X3,
+  List,
+  Star,
+  IndianRupee,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+} from "lucide-react";
 
 import { EditProductForm } from "../forms/ProductForm";
-
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
 export function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState(""); // New state for filtering
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState("grid"); // grid or list
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [deleteProduct, setDeleteProduct] = useState(null);
@@ -135,128 +157,350 @@ export function ProductsPage() {
     toast({ title: "Product deleted successfully" });
   };
 
-  // Filter products by selected category if any selected
-  const filteredProducts = selectedCategoryId
-    ? products.filter((p) => p.category_id === selectedCategoryId)
-    : products;
+  // Refresh data
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+
+  // Filter products by selected category and search term
+  const filteredProducts = products.filter((product) => {
+    const matchesCategory = selectedCategoryId
+      ? product.category_id === selectedCategoryId
+      : true;
+    const matchesSearch = searchTerm
+      ? product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchTerm.toLowerCase())
+      : true;
+    return matchesCategory && matchesSearch;
+  });
+
+  // Get stats
+  const totalProducts = products.length;
+  const featuredProducts = products.filter((p) => p.featured).length;
+  const inStockProducts = products.filter((p) => p.in_stock).length;
+  const outOfStockProducts = totalProducts - inStockProducts;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center space-y-4">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <div className="text-lg font-medium">Loading products...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header and Add button */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-foreground">Products</h1>
-        {/* Navigate to separate Add Product page */}
-        <Button
-          onClick={() => navigate("/admin/products/add-product")}
-          className="bg-primary hover:bg-primary-hover text-primary-foreground"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Product
-        </Button>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-4xl font-bold text-foreground tracking-tight">
+            Products
+          </h1>
+          <p className="text-muted-foreground text-lg">
+            Manage your product inventory and catalog
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <Button onClick={handleRefresh} variant="outline" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <Button
+            onClick={() => navigate("/admin/products/add-product")}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Product
+          </Button>
+        </div>
       </div>
 
-      {/* Category Filter Dropdown */}
-      <div className="mb-4 max-w-xs">
-        <label
-          htmlFor="category-filter"
-          className="block mb-1 font-medium text-gray-700"
-        >
-          Filter by Category
-        </label>
-        <select
-          id="category-filter"
-          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-          value={selectedCategoryId}
-          onChange={(e) => setSelectedCategoryId(e.target.value)}
-        >
-          <option value="">All Categories</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total Products
+            </CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalProducts}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Featured</CardTitle>
+            <Star className="h-4 w-4 text-yellow-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{featuredProducts}</div>
+            <p className="text-xs text-muted-foreground">
+              {4 - featuredProducts} slots available
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">In Stock</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{inStockProducts}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
+            <XCircle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{outOfStockProducts}</div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Filters and Search */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filters & Search
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+            {/* Search */}
+            <div className="flex-1 space-y-2">
+              <label className="text-sm font-medium">Search Products</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by title or description..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Category Filter */}
+            <div className="space-y-2 min-w-[200px]">
+              <label className="text-sm font-medium">Filter by Category</label>
+              // In your ProductsPage component, update the Select component:
+              <Select
+                value={selectedCategoryId}
+                onValueChange={setSelectedCategoryId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>{" "}
+                  {/* ✅ Use "all" instead of "" */}
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">View</label>
+              <div className="flex border rounded-lg">
+                <Button
+                  variant={viewMode === "grid" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("grid")}
+                  className="rounded-r-none"
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  className="rounded-l-none"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Active Filters Display */}
+          {(selectedCategoryId || searchTerm) && (
+            <div className="flex items-center gap-2 mt-4 pt-4 border-t">
+              <span className="text-sm text-muted-foreground">
+                Active filters:
+              </span>
+              {selectedCategoryId && (
+                <Badge variant="secondary" className="gap-1">
+                  {categories.find((c) => c.id === selectedCategoryId)?.name}
+                  <button
+                    onClick={() => setSelectedCategoryId("")}
+                    className="ml-1 hover:bg-muted rounded-full p-0.5"
+                  >
+                    ×
+                  </button>
+                </Badge>
+              )}
+              {searchTerm && (
+                <Badge variant="secondary" className="gap-1">
+                  Search: "{searchTerm}"
+                  <button
+                    onClick={() => setSearchTerm("")}
+                    className="ml-1 hover:bg-muted rounded-full p-0.5"
+                  >
+                    ×
+                  </button>
+                </Badge>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Product list */}
-      <Card className="bg-card border-border">
+      <Card>
         <CardHeader>
-          <CardTitle>Product Inventory</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>Product Inventory</span>
+            <Badge variant="outline">
+              {filteredProducts.length} of {totalProducts} products
+            </Badge>
+          </CardTitle>
           <CardDescription>
-            Showing {filteredProducts.length}{" "}
             {selectedCategoryId
-              ? `product${filteredProducts.length !== 1 ? "s" : ""} in ${
+              ? `Showing products in ${
                   categories.find((c) => c.id === selectedCategoryId)?.name ||
                   ""
                 }`
-              : `product${
-                  filteredProducts.length !== 1 ? "s" : ""
-                } in all categories`}
+              : "Showing all products"}
+            {searchTerm && ` matching "${searchTerm}"`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <p className="text-center py-10">Loading products...</p>
-          ) : filteredProducts.length === 0 ? (
-            <p className="text-center py-10 text-muted-foreground">
-              No products found.
-            </p>
+          {filteredProducts.length === 0 ? (
+            <div className="text-center py-12">
+              <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-medium mb-2">No products found</h3>
+              <p className="text-muted-foreground mb-4">
+                {searchTerm || selectedCategoryId
+                  ? "Try adjusting your filters or search terms"
+                  : "Get started by adding your first product"}
+              </p>
+              {!searchTerm && !selectedCategoryId && (
+                <Button onClick={() => navigate("/admin/products/add-product")}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Your First Product
+                </Button>
+              )}
+            </div>
           ) : (
-            <div className="space-y-4">
+            <div
+              className={
+                viewMode === "grid"
+                  ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                  : "space-y-4"
+              }
+            >
               {filteredProducts.map((product) => (
                 <Card
                   key={product.id}
-                  className="bg-surface-light border-border"
+                  className={`hover:shadow-lg transition-all duration-200 hover:scale-[1.02] ${
+                    viewMode === "list" ? "flex flex-row" : ""
+                  }`}
                 >
-                  <CardHeader className="flex justify-between items-center">
-                    <div>
-                      <CardTitle>{product.title}</CardTitle>
-                      <CardDescription className="text-muted-foreground">
-                        Category:{" "}
-                        {categories.find(
-                          (cat) => cat.id === product.category_id
-                        )?.name || "Uncategorized"}
-                      </CardDescription>
-                    </div>
-                    {product.featured && (
-                      <Badge variant="secondary" className="text-yellow-600">
-                        Featured
-                      </Badge>
-                    )}
-                  </CardHeader>
-                  <CardContent>
-                    <p className="mb-2">{product.description}</p>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-lg font-semibold">
-                          ${product.price.toFixed(2)}
-                        </p>
-                        <p className="text-sm">
-                          {product.in_stock ? "In Stock" : "Out of Stock"}
-                        </p>
+                  <div className={viewMode === "list" ? "flex-1" : ""}>
+                    <CardHeader
+                      className={`${viewMode === "list" ? "pb-2" : ""}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <CardTitle className="text-lg">
+                            {product.title}
+                          </CardTitle>
+                          <CardDescription className="text-sm">
+                            {categories.find(
+                              (cat) => cat.id === product.category_id
+                            )?.name || "Uncategorized"}
+                          </CardDescription>
+                        </div>
+                        <div className="flex gap-1">
+                          {product.featured && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-yellow-100 text-yellow-800 gap-1"
+                            >
+                              <Star className="h-3 w-3" />
+                              Featured
+                            </Badge>
+                          )}
+                          <Badge
+                            variant={
+                              product.in_stock ? "default" : "destructive"
+                            }
+                          >
+                            {product.in_stock ? "In Stock" : "Out of Stock"}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setEditingProduct(product);
-                            setIsFormOpen(true);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive"
-                          onClick={() => setDeleteProduct(product)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                        {product.description}
+                      </p>
+
+                      <div
+                        className={`flex ${
+                          viewMode === "list" ? "flex-row" : "flex-col"
+                        } justify-between items-${
+                          viewMode === "list" ? "center" : "start"
+                        } gap-4`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <IndianRupee className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-xl font-bold">
+                            {product.price.toFixed(2)}
+                          </span>
+                        </div>
+
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingProduct(product);
+                              setIsFormOpen(true);
+                            }}
+                            className="hover:bg-blue-50 hover:border-blue-300"
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:bg-red-50 hover:border-red-300"
+                            onClick={() => setDeleteProduct(product)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
+                    </CardContent>
+                  </div>
                 </Card>
               ))}
             </div>
@@ -274,7 +518,7 @@ export function ProductsPage() {
           }
         }}
       >
-        <DialogContent className="max-h-[80vh] overflow-y-auto p-6">
+        <DialogContent className="max-h-[80vh] overflow-y-auto p-6 max-w-2xl">
           {editingProduct && (
             <EditProductForm
               product={editingProduct}
@@ -299,7 +543,8 @@ export function ProductsPage() {
             <AlertDialogTitle>Delete Product</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{deleteProduct?.title}"? This
-              action cannot be undone.
+              action cannot be undone and will remove the product from your
+              catalog.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -308,7 +553,7 @@ export function ProductsPage() {
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              Delete Product
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
