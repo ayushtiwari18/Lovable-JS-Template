@@ -1,34 +1,22 @@
-require("dotenv").config();
-const { getEnvironmentConfig } = require("./environment");
+const config = require("./environment");
 
-const { baseUrl } = getEnvironmentConfig();
+const phonepeConfig = {
+  MERCHANT_ID: config.PHONEPE_MERCHANT_ID,
+  SALT_KEY: config.PHONEPE_SALT_KEY,
+  SALT_INDEX: config.PHONEPE_SALT_INDEX,
+  BASE_URL: config.PHONEPE_BASE_URL,
 
-const config = {
-  MERCHANT_ID: process.env.PHONEPE_MERCHANT_ID || process.env.MERCHANT_ID,
-  SALT_KEY: process.env.PHONEPE_SALT_KEY || process.env.SALT_KEY,
-  SALT_INDEX: process.env.PHONEPE_SALT_INDEX || process.env.SALT_INDEX,
-  BASE_URL:
-    process.env.PHONEPE_BASE_URL ||
-    "https://api-preprod.phonepe.com/apis/pg-sandbox",
-  getRedirectUrl: () => `${baseUrl}/redirect`,
-  getCallbackUrl: () => `${baseUrl}/callback`,
+  getRedirectUrl: (port = config.PORT) => {
+    return config.NODE_ENV === "production"
+      ? "https://shrifal-handicrafts-api.onrender.com/redirect"
+      : `http://localhost:${port}/redirect`;
+  },
+
+  getCallbackUrl: (port = config.PORT) => {
+    return config.NODE_ENV === "production"
+      ? "https://shrifal-handicrafts-api.onrender.com/callback"
+      : `http://localhost:${port}/callback`;
+  },
 };
 
-// Validation
-const requiredFields = ["MERCHANT_ID", "SALT_KEY", "SALT_INDEX"];
-const missing = requiredFields.filter((field) => !config[field]);
-
-if (missing.length > 0) {
-  console.error("❌ Missing required PhonePe configuration:", missing);
-  process.exit(1);
-}
-
-console.log("✅ PhonePe config loaded:", {
-  merchantId: config.MERCHANT_ID,
-  saltIndex: config.SALT_INDEX,
-  baseUrl: config.BASE_URL,
-  redirectUrl: config.getRedirectUrl(),
-  callbackUrl: config.getCallbackUrl(),
-});
-
-module.exports = config;
+module.exports = phonepeConfig;

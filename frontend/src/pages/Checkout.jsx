@@ -142,20 +142,52 @@ const Checkout = () => {
       console.log("=== CREATING ORDER ===");
       console.log("User ID:", user.id);
 
-      const { data: customer, error: customerError } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
+      // Get the current authenticated user
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-      if (customerError) {
-        console.error("❌ Customer lookup failed:", customerError);
-        throw new Error("Customer lookup failed: " + customerError.message);
+      if (authError || !authUser) {
+        throw new Error("Authentication failed");
       }
 
-      if (!customer || !customer.id) {
-        console.error("❌ No customer ID found");
-        throw new Error("Customer profile not found");
+      // Get or create customer record
+      let customer;
+      const { data: existingCustomer, error: customerFetchError } =
+        await supabase
+          .from("customers")
+          .select("id")
+          .eq("user_id", authUser.id)
+          .single();
+
+      if (customerFetchError && customerFetchError.code !== "PGRST116") {
+        throw new Error(
+          "Failed to fetch customer: " + customerFetchError.message
+        );
+      }
+
+      if (existingCustomer) {
+        customer = existingCustomer;
+      } else {
+        // Create customer if doesn't exist
+        const { data: newCustomer, error: customerCreateError } = await supabase
+          .from("customers")
+          .insert({
+            user_id: authUser.id,
+            name: `${formData.firstName} ${formData.lastName}`,
+            email: formData.email,
+            phone: formData.phone,
+          })
+          .select("id")
+          .single();
+
+        if (customerCreateError) {
+          throw new Error(
+            "Failed to create customer: " + customerCreateError.message
+          );
+        }
+        customer = newCustomer;
       }
 
       const subtotal = getTotalPrice();
@@ -164,8 +196,8 @@ const Checkout = () => {
       const totalPaise = Math.round(total * 100);
 
       const orderData = {
-        user_id: user.id,
-        customer_id: customer.id,
+        user_id: authUser.id, // ✅ Use authUser.id
+        customer_id: customer.id, // ✅ Use customer.id
         items: items.map((item) => ({
           id: item.id,
           name: item.name,
@@ -197,7 +229,8 @@ const Checkout = () => {
         order_notes: null,
       };
 
-      // Insert with immediate verification
+      console.log("📦 Creating order with data:", orderData);
+
       const { data, error } = await supabase
         .from("orders")
         .insert([orderData])
@@ -209,68 +242,22 @@ const Checkout = () => {
         throw new Error(`Database error: ${error.message}`);
       }
 
-      // VERIFY the order was created by fetching it back
-      const { data: verifyOrder, error: verifyError } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("id", data.id)
-        .single();
-
-      if (verifyError || !verifyOrder) {
-        console.error("❌ Order verification failed:", verifyError);
-        throw new Error("Order creation verification failed");
-      }
-
-      console.log("✅ Order created and verified:", verifyOrder);
-      return verifyOrder;
+      console.log("✅ Order created successfully:", data);
+      return data;
     } catch (error) {
       console.error("🚨 CREATE ORDER FAILED:", error);
       throw error;
     }
   };
 
-  // COD Payment Handler - FIXED with proper async/await
-  const handleCODPayment = async () => {
-    if (!validateForm()) return;
-    setProcessingPayment(true);
 
-    try {
-      const order = await createOrder("COD");
-
-      // Clear cart FIRST and AWAIT it
-      console.log("🧹 Clearing cart after successful COD order...");
-      await clearCart();
-      console.log("✅ Cart cleared successfully");
-
-      toast({
-        title: "Order Placed Successfully!",
-        description: `Order #${order.id.slice(
-          0,
-          8
-        )} has been placed. You'll pay on delivery.`,
-      });
-
-      // Navigate after cart is cleared
-      navigate(`/order/${order.id}`);
-    } catch (error) {
-      console.error("COD Payment error:", error);
-      toast({
-        title: "Order Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setProcessingPayment(false);
-    }
-  };
-
-  // PayNow Handler - Clear cart after PhonePe redirect
+  // PayNow Handler - DON'T clear cart until payment succeeds
   const handlePayNow = async () => {
     if (!validateForm()) return;
     setProcessingPayment(true);
 
     try {
-      // Store cart data before clearing (needed for PhonePe form)
+      // Store cart data before potential clearing
       const cartItemsForPhonePe = items.map((item) => ({
         id: item.id,
         name: item.name,
@@ -283,17 +270,13 @@ const Checkout = () => {
       // Create order in database first
       const order = await createOrder("PayNow");
 
-      // Add a small delay to ensure database consistency
-      // await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Clear cart immediately after order creation
-      console.log("🧹 Clearing cart before PhonePe redirect...");
-      await clearCart();
-      console.log("✅ Cart cleared successfully");
+      // 🚨 DON'T CLEAR CART HERE!
+      // Cart will be cleared by payment success webhook/callback
+      console.log("📦 Keeping cart until payment confirmation...");
 
       const totalAmount = Math.round(getTotalPrice() * 1.08 * 100);
 
-      // Set form values for PhonePe using stored cart data
+      // Set form values for PhonePe
       document.getElementById("pp-order-id").value = order.id;
       document.getElementById("pp-amount").value = totalAmount;
       document.getElementById("pp-customer-email").value = formData.email;
@@ -301,11 +284,8 @@ const Checkout = () => {
       document.getElementById(
         "pp-customer-name"
       ).value = `${formData.firstName} ${formData.lastName}`;
-
-      // Use stored cart data since cart is now cleared
       document.getElementById("pp-cart-items").value =
         JSON.stringify(cartItemsForPhonePe);
-
       document.getElementById("pp-shipping-info").value = JSON.stringify({
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -325,6 +305,67 @@ const Checkout = () => {
         description: error.message,
         variant: "destructive",
       });
+      setProcessingPayment(false);
+    }
+  };
+
+  // In your payment success page/component
+const handlePaymentSuccess = async (orderId) => {
+  try {
+    // Verify payment with your backend first
+    const { data: order } = await supabase
+      .from("orders")
+      .select("payment_status")
+      .eq("id", orderId)
+      .single();
+
+    if (order.payment_status === "completed") {
+      // NOW clear the cart
+      await clearCart();
+      
+      toast({
+        title: "Payment Successful!",
+        description: "Your order has been confirmed.",
+      });
+      
+      navigate(`/order/${orderId}`);
+    }
+  } catch (error) {
+    console.error("Payment verification failed:", error);
+  }
+};
+
+
+  // COD Handler - This is fine as is
+  const handleCODPayment = async () => {
+    if (!validateForm()) return;
+    setProcessingPayment(true);
+
+    try {
+      const order = await createOrder("COD");
+
+      // ✅ Clear cart for COD since order creation = success
+      console.log("🧹 Clearing cart after successful COD order...");
+      await clearCart();
+      console.log("✅ Cart cleared successfully");
+
+      toast({
+        title: "Order Placed Successfully!",
+        description: `Order #${order.id.slice(
+          0,
+          8
+        )} has been placed. You'll pay on delivery.`,
+      });
+
+      navigate(`/order/${order.id}`);
+    } catch (error) {
+      console.error("COD Payment error:", error);
+      toast({
+        title: "Order Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
       setProcessingPayment(false);
     }
   };

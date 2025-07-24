@@ -1,10 +1,8 @@
-const logger = require("../utils/logger");
-
 class ErrorHandler {
   // Main error handling middleware
   handleErrors(err, req, res, next) {
-    // Log error details
-    logger.error("Unhandled error occurred", {
+    // Console log error details instead of logger
+    console.error("Unhandled error occurred", {
       error: {
         message: err.message,
         stack: err.stack,
@@ -252,7 +250,7 @@ class ErrorHandler {
   // Handle uncaught exceptions
   handleUncaughtException() {
     process.on("uncaughtException", (err) => {
-      logger.error("Uncaught Exception:", {
+      console.error("Uncaught Exception:", {
         error: {
           message: err.message,
           stack: err.stack,
@@ -269,7 +267,7 @@ class ErrorHandler {
   // Handle unhandled promise rejections
   handleUnhandledRejection() {
     process.on("unhandledRejection", (err, promise) => {
-      logger.error("Unhandled Promise Rejection:", {
+      console.error("Unhandled Promise Rejection:", {
         error: {
           message: err.message,
           stack: err.stack,
