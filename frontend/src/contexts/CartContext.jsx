@@ -14,7 +14,7 @@ export const useCart = () => {
 };
 
 export const CartProvider = ({ children }) => {
-  const { user } = useAuth();
+  const { user } = useAuth(); // ✅ user is properly defined here
   const { toast } = useToast();
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -239,6 +239,64 @@ export const CartProvider = ({ children }) => {
     }
   };
 
+  // ✅ FIXED: Restore cart from order function
+  const restoreCartFromOrder = async (order) => {
+    try {
+      console.log("🔄 Restoring cart from order:", order.id);
+
+      // Clear current cart first
+      if (user) {
+        await supabase.from("cart_items").delete().eq("user_id", user.id);
+      } else {
+        localStorage.removeItem("cart_items");
+      }
+
+      // Restore items from order
+      const orderItems = order.items || [];
+
+      if (user) {
+        // For authenticated users - add to database
+        const cartInserts = orderItems.map((item) => ({
+          user_id: user.id,
+          product_id: item.id,
+          quantity: item.quantity,
+        }));
+
+        if (cartInserts.length > 0) {
+          const { error } = await supabase
+            .from("cart_items")
+            .insert(cartInserts);
+
+          if (error) throw error;
+        }
+
+        // Refresh cart from database
+        await fetchCartItems();
+      } else {
+        // For guest users - add to localStorage
+        const cartItems = orderItems.map((item) => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          image: item.image,
+          quantity: item.quantity,
+          customization: item.customization || null,
+        }));
+
+        localStorage.setItem("cart_items", JSON.stringify(cartItems));
+        setCartItems(cartItems);
+      }
+
+      toast({
+        title: "Cart Restored",
+        description: `${orderItems.length} items restored from your previous order.`,
+      });
+    } catch (error) {
+      console.error("Error restoring cart:", error);
+      throw error;
+    }
+  };
+
   // Fetch cart items from Supabase or localStorage
   const fetchCartItems = async () => {
     setLoading(true);
@@ -406,6 +464,7 @@ export const CartProvider = ({ children }) => {
     getCartForCheckout,
     fetchCartItems,
     syncCartToDatabase,
+    restoreCartFromOrder, // ✅ Added to context value
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

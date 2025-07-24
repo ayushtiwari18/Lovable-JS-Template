@@ -1,241 +1,227 @@
 const express = require("express");
 const router = express.Router();
-const orderController = require("../controllers/orderController");
-const authMiddleware = require("../middleware/auth");
-const validationMiddleware = require("../middleware/validation");
-const rateLimiter = require("../middleware/rateLimiter");
+const { supabaseAdmin } = require("../config/supabaseClient");
 
-// Apply general rate limiting
-router.use(rateLimiter.apiLimiter());
+// Update the create order endpoint in orders.js:
+router.post("/", async (req, res) => {
+  try {
+    console.log("=== CREATE ORDER ===");
+    console.log("Request body:", req.body);
 
-/**
- * @route   POST /api/orders
- * @desc    Create new order
- * @access  Public/Private
- */
-router.post(
-  "/",
-  authMiddleware.optionalAuth,
-  validationMiddleware.validateOrderCreation(),
-  orderController.createOrder
-);
+    const {
+      customerInfo,
+      items,
+      shippingAddress,
+      totalAmount,
+      paymentMethod = "phonepe",
+    } = req.body;
 
-/**
- * @route   GET /api/orders/:orderId
- * @desc    Get order by ID
- * @access  Public (with restrictions)
- */
-router.get(
-  "/:orderId",
-  authMiddleware.optionalAuth,
-  validationMiddleware.validateObjectId("orderId"),
-  orderController.getOrderById
-);
+    // Validate required fields
+    if (!customerInfo || !items || !totalAmount) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: customerInfo, items, totalAmount",
+      });
+    }
 
-/**
- * @route   GET /api/orders/user/:userId
- * @desc    Get orders for specific user
- * @access  Private (user or admin)
- */
-router.get(
-  "/user/:userId",
-  authMiddleware.authenticateToken,
-  authMiddleware.checkResourceOwnership("userId"),
-  validationMiddleware.validateObjectId("userId"),
-  validationMiddleware.validatePagination(),
-  orderController.getUserOrders
-);
+    // Create order data matching your existing schema
+    const orderData = {
+      user_id: null, // Set this if you have user authentication
+      customer_id: null, // Set this if you have a customers table
+      items: JSON.stringify(items),
+      status: "pending",
+      total_price: parseInt(totalAmount), // Use total_price
+      amount: parseInt(totalAmount), // Your table has both fields
+      shipping_info: JSON.stringify({
+        customer_name: customerInfo.name,
+        customer_email: customerInfo.email,
+        customer_phone: customerInfo.phone,
+        address: shippingAddress || {}
+      }),
+      payment_method: paymentMethod,
+      payment_status: "pending",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
 
-/**
- * @route   PUT /api/orders/:orderId/status
- * @desc    Update order status
- * @access  Admin only
- */
-router.put(
-  "/:orderId/status",
-  authMiddleware.authenticateToken,
-  authMiddleware.requireAdmin,
-  validationMiddleware.validateObjectId("orderId"),
-  validationMiddleware.validateOrderStatusUpdate(),
-  orderController.updateOrderStatus
-);
+    console.log("💾 Inserting order data:", orderData);
 
-/**
- * @route   POST /api/orders/:orderId/cancel
- * @desc    Cancel order
- * @access  Private (owner or admin)
- */
-router.post(
-  "/:orderId/cancel",
-  authMiddleware.authenticateToken,
-  validationMiddleware.validateObjectId("orderId"),
-  [
-    body("reason")
-      .optional()
-      .isLength({ max: 500 })
-      .withMessage("Cancellation reason must not exceed 500 characters"),
-  ],
-  orderController.cancelOrder
-);
+    // Insert into Supabase
+    const { data: order, error } = await supabaseAdmin
+      .from("orders")
+      .insert([orderData])
+      .select("*")
+      .single();
 
-/**
- * @route   GET /api/orders
- * @desc    Get all orders (with filters)
- * @access  Admin only
- */
-router.get(
-  "/",
-  authMiddleware.authenticateToken,
-  authMiddleware.requireAdmin,
-  validationMiddleware.validatePagination(),
-  [
-    query("status")
-      .optional()
-      .isIn([
-        "pending",
-        "confirmed",
-        "processing",
-        "shipped",
-        "delivered",
-        "cancelled",
-        "failed",
-      ])
-      .withMessage("Invalid status filter"),
-    query("search")
-      .optional()
-      .isLength({ min: 2, max: 100 })
-      .withMessage("Search query must be 2-100 characters"),
-  ],
-  orderController.getAllOrders
-);
+    if (error) {
+      console.error("❌ Database error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create order",
+        error: error.message,
+      });
+    }
 
-/**
- * @route   GET /api/orders/analytics/summary
- * @desc    Get order analytics summary
- * @access  Admin only
- */
-router.get(
-  "/analytics/summary",
-  authMiddleware.authenticateToken,
-  authMiddleware.requireAdmin,
-  validationMiddleware.validateDateRange(),
-  orderController.getOrderAnalytics
-);
+    console.log("✅ Order created successfully:", order);
 
-/**
- * @route   PUT /api/orders/:orderId
- * @desc    Update order details
- * @access  Admin only
- */
-router.put(
-  "/:orderId",
-  authMiddleware.authenticateToken,
-  authMiddleware.requireAdmin,
-  validationMiddleware.validateObjectId("orderId"),
-  [
-    body("shippingAddress.street").optional().notEmpty(),
-    body("shippingAddress.city").optional().notEmpty(),
-    body("shippingAddress.state").optional().notEmpty(),
-    body("shippingAddress.pincode").optional().isLength({ min: 6, max: 6 }),
-    body("notes").optional().isLength({ max: 1000 }),
-  ],
-  orderController.updateOrder
-);
+    res.status(201).json({
+      success: true,
+      message: "Order created successfully",
+      data: order,
+    });
+  } catch (error) {
+    console.error("❌ Create order error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
 
-/**
- * @route   POST /api/orders/:orderId/shipping
- * @desc    Add shipping information
- * @access  Admin only
- */
-router.post(
-  "/:orderId/shipping",
-  authMiddleware.authenticateToken,
-  authMiddleware.requireAdmin,
-  validationMiddleware.validateObjectId("orderId"),
-  [
-    body("trackingNumber")
-      .notEmpty()
-      .withMessage("Tracking number is required"),
-    body("carrier").notEmpty().withMessage("Carrier is required"),
-    body("estimatedDelivery")
-      .optional()
-      .isISO8601()
-      .withMessage("Invalid delivery date"),
-  ],
-  orderController.addShippingInfo
-);
 
-/**
- * @route   GET /api/orders/:orderId/tracking
- * @desc    Get order tracking information
- * @access  Private (owner or admin)
- */
-router.get(
-  "/:orderId/tracking",
-  authMiddleware.authenticateToken,
-  validationMiddleware.validateObjectId("orderId"),
-  orderController.getOrderTracking
-);
+// Get order by ID
+router.get("/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    console.log("=== GET ORDER ===");
+    console.log("Order ID:", orderId);
 
-/**
- * @route   POST /api/orders/:orderId/notes
- * @desc    Add notes to order
- * @access  Admin only
- */
-router.post(
-  "/:orderId/notes",
-  authMiddleware.authenticateToken,
-  authMiddleware.requireAdmin,
-  validationMiddleware.validateObjectId("orderId"),
-  [
-    body("note")
-      .notEmpty()
-      .isLength({ max: 1000 })
-      .withMessage("Note is required and must not exceed 1000 characters"),
-    body("isInternal")
-      .optional()
-      .isBoolean()
-      .withMessage("isInternal must be boolean"),
-  ],
-  orderController.addOrderNote
-);
+    const { data: order, error } = await supabaseAdmin
+      .from("orders")
+      .select("*")
+      .eq("id", orderId)
+      .single();
 
-/**
- * @route   GET /api/orders/export/csv
- * @desc    Export orders to CSV
- * @access  Admin only
- */
-router.get(
-  "/export/csv",
-  authMiddleware.authenticateToken,
-  authMiddleware.requireAdmin,
-  validationMiddleware.validateDateRange(),
-  orderController.exportOrdersCSV
-);
+    if (error) {
+      console.error("❌ Database error:", error);
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+        error: error.message,
+      });
+    }
 
-/**
- * @route   POST /api/orders/bulk/update
- * @desc    Bulk update order statuses
- * @access  Admin only
- */
-router.post(
-  "/bulk/update",
-  authMiddleware.authenticateToken,
-  authMiddleware.requireAdmin,
-  [
-    body("orderIds")
-      .isArray({ min: 1 })
-      .withMessage("Order IDs array is required"),
-    body("status")
-      .notEmpty()
-      .isIn(["confirmed", "processing", "shipped", "delivered", "cancelled"])
-      .withMessage("Valid status is required"),
-    body("note")
-      .optional()
-      .isLength({ max: 500 })
-      .withMessage("Note must not exceed 500 characters"),
-  ],
-  orderController.bulkUpdateOrders
-);
+    console.log("✅ Order found:", order);
+
+    res.json({
+      success: true,
+      data: order,
+    });
+  } catch (error) {
+    console.error("❌ Get order error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+// Update order status
+router.put("/:orderId/status", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { status, paymentStatus, transactionId, phonepeResponse } = req.body;
+
+    console.log("=== UPDATE ORDER STATUS ===");
+    console.log("Order ID:", orderId);
+    console.log("New status:", status);
+    console.log("Payment status:", paymentStatus);
+
+    const updateData = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (status) updateData.status = status;
+    if (paymentStatus) updateData.payment_status = paymentStatus;
+    if (transactionId) updateData.transaction_id = transactionId;
+    if (phonepeResponse)
+      updateData.phonepe_response = JSON.stringify(phonepeResponse);
+
+    const { data: order, error } = await supabaseAdmin
+      .from("orders")
+      .update(updateData)
+      .eq("id", orderId)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("❌ Database error:", error);
+      return res.status(404).json({
+        success: false,
+        message: "Order not found or update failed",
+        error: error.message,
+      });
+    }
+
+    console.log("✅ Order updated successfully:", order);
+
+    res.json({
+      success: true,
+      message: "Order updated successfully",
+      data: order,
+    });
+  } catch (error) {
+    console.error("❌ Update order error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+// Get all orders (with pagination)
+router.get("/", async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const offset = (page - 1) * limit;
+
+    console.log("=== GET ALL ORDERS ===");
+    console.log("Page:", page, "Limit:", limit, "Status filter:", status);
+
+    let query = supabaseAdmin
+      .from("orders")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (status) {
+      query = query.eq("status", status);
+    }
+
+    const { data: orders, error, count } = await query;
+
+    if (error) {
+      console.error("❌ Database error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch orders",
+        error: error.message,
+      });
+    }
+
+    console.log(`✅ Found ${orders.length} orders`);
+
+    res.json({
+      success: true,
+      data: orders,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (error) {
+    console.error("❌ Get orders error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
 
 module.exports = router;

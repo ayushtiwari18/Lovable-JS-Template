@@ -1,74 +1,144 @@
-const crypto = require("crypto");
 const axios = require("axios");
-const config = require("../config/phonepe");
+const crypto = require("crypto");
+const phonepeConfig = require("../config/phonepe");
+const logger = require("../utils/logger");
 
 class PhonePeService {
-  static createPayload(paymentData, redirectUrl, callbackUrl) {
-    const { orderId, amount, customerEmail, customerPhone } = paymentData;
-
-    return {
-      merchantId: config.MERCHANT_ID,
-      merchantTransactionId: orderId,
-      merchantUserId: customerEmail || "user_" + Date.now(),
-      amount: parseInt(amount),
-      merchantOrderId: orderId,
-      redirectUrl,
-      redirectMode: "POST",
-      callbackUrl,
-      mobileNumber: customerPhone,
-      paymentInstrument: {
-        type: "PAY_PAGE",
-      },
-    };
+  static generateChecksum(payload) {
+    const string = payload + "/pg/v1/pay" + phonepeConfig.SALT_KEY;
+    const sha256 = crypto.createHash("sha256").update(string).digest("hex");
+    return sha256 + "###" + phonepeConfig.SALT_INDEX;
   }
 
-  static createSignature(payload) {
-    const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString(
-      "base64"
-    );
-    const stringToHash = payloadBase64 + "/pg/v1/pay" + config.SALT_KEY;
-    const hash = crypto.createHash("sha256").update(stringToHash).digest("hex");
-    const xVerify = `${hash}###${config.SALT_INDEX}`;
-
-    return { payloadBase64, xVerify };
+  static generateStatusChecksum(transactionId) {
+    const string =
+      `/pg/v1/status/${phonepeConfig.MERCHANT_ID}/${transactionId}` +
+      phonepeConfig.SALT_KEY;
+    const sha256 = crypto.createHash("sha256").update(string).digest("hex");
+    return sha256 + "###" + phonepeConfig.SALT_INDEX;
   }
 
   static async initiatePayment(paymentData, redirectUrl, callbackUrl) {
-    const payload = this.createPayload(paymentData, redirectUrl, callbackUrl);
-    const { payloadBase64, xVerify } = this.createSignature(payload);
+    try {
+      const { orderId, amount, customerEmail, customerPhone, customerName } =
+        paymentData;
 
-    const response = await axios.post(
-      `${config.BASE_URL}/pg/v1/pay`,
-      { request: payloadBase64 },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "X-VERIFY": xVerify,
-          "X-MERCHANT-ID": config.MERCHANT_ID,
+      // Create payment payload
+      const paymentPayload = {
+        merchantId: phonepeConfig.MERCHANT_ID,
+        merchantTransactionId: orderId,
+        merchantUserId: `USER_${Date.now()}`,
+        amount: amount, // amount in paise
+        redirectUrl: redirectUrl,
+        redirectMode: "POST",
+        callbackUrl: callbackUrl,
+        mobileNumber: customerPhone.replace(/\D/g, "").slice(-10), // Clean phone number
+        paymentInstrument: {
+          type: "PAY_PAGE",
         },
-        timeout: 15000,
-      }
-    );
+      };
 
-    return response.data;
+      // Convert to base64
+      const base64Payload = Buffer.from(
+        JSON.stringify(paymentPayload)
+      ).toString("base64");
+
+      // Generate checksum
+      const checksum = this.generateChecksum(base64Payload);
+
+      // Prepare request
+      const requestData = {
+        request: base64Payload,
+      };
+
+      const headers = {
+        "Content-Type": "application/json",
+        "X-VERIFY": checksum,
+        accept: "application/json",
+      };
+
+      logger.info("Initiating PhonePe payment request", {
+        orderId,
+        amount,
+        merchantId: phonepeConfig.MERCHANT_ID,
+        url: `${phonepeConfig.BASE_URL}/pay`,
+      });
+
+      // Make API call
+      const response = await axios.post(
+        `${phonepeConfig.BASE_URL}/pay`,
+        requestData,
+        { headers, timeout: 30000 }
+      );
+
+      logger.info("PhonePe payment response received", {
+        orderId,
+        success: response.data.success,
+        code: response.data.code,
+      });
+
+      return response.data;
+    } catch (error) {
+      logger.error("PhonePe payment initiation failed", {
+        orderId: paymentData.orderId,
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+
+      if (error.response) {
+        return {
+          success: false,
+          message: error.response.data.message || "Payment gateway error",
+          code: error.response.data.code,
+          data: error.response.data,
+        };
+      }
+
+      return {
+        success: false,
+        message: "Network error while processing payment",
+        error: error.message,
+      };
+    }
   }
 
-  static async checkStatus(txnId) {
-    const apiPath = `/pg/v1/status/${config.MERCHANT_ID}/${txnId}`;
-    const stringToHash = apiPath + config.SALT_KEY;
-    const hash = crypto.createHash("sha256").update(stringToHash).digest("hex");
-    const xVerify = hash + "###" + config.SALT_INDEX;
+  static async checkStatus(transactionId) {
+    try {
+      const checksum = this.generateStatusChecksum(transactionId);
 
-    const response = await axios.get(config.BASE_URL + apiPath, {
-      headers: {
+      const headers = {
         "Content-Type": "application/json",
-        "X-VERIFY": xVerify,
-        "X-MERCHANT-ID": config.MERCHANT_ID,
-      },
-      timeout: 10000,
-    });
+        "X-VERIFY": checksum,
+        "X-MERCHANT-ID": phonepeConfig.MERCHANT_ID,
+        accept: "application/json",
+      };
 
-    return response.data;
+      const url = `${phonepeConfig.BASE_URL}/status/${phonepeConfig.MERCHANT_ID}/${transactionId}`;
+
+      logger.info("Checking PhonePe payment status", {
+        transactionId,
+        url,
+      });
+
+      const response = await axios.get(url, { headers, timeout: 15000 });
+
+      logger.info("PhonePe status response received", {
+        transactionId,
+        success: response.data.success,
+        state: response.data.data?.state,
+      });
+
+      return response.data;
+    } catch (error) {
+      logger.error("PhonePe status check failed", {
+        transactionId,
+        error: error.message,
+        response: error.response?.data,
+      });
+
+      throw new Error(`Status check failed: ${error.message}`);
+    }
   }
 }
 
