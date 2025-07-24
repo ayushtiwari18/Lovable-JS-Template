@@ -14,13 +14,15 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4  # Updated to v4 for better support
       with:
         node-version: '18'
         cache: 'npm'
+        # Add cache-dependency-path to be more specific
+        cache-dependency-path: 'package-lock.json'
     
     - name: Install dependencies
-      run: npm ci
+      run: npm ci  # npm ci requires package-lock.json
     
     - name: Run tests
       run: npm test
