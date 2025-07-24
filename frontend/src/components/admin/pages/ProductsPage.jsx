@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
 import {
   Card,
   CardContent,
@@ -7,7 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -19,99 +21,133 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Eye, Edit, Trash2 } from "lucide-react";
-import { ProductForm } from "../forms/ProductForm";
-import { useToast } from "@/hooks/use-toast";
+import { Plus, Edit, Trash2 } from "lucide-react";
 
-const initialProducts = [
-  {
-    id: 1,
-    name: "Premium Trophy",
-    price: 199.99,
-    stock: 45,
-    status: "active",
-    category: "Awards",
-  },
-  {
-    id: 2,
-    name: "Golden Medal",
-    price: 89.99,
-    stock: 23,
-    status: "active",
-    category: "Medals",
-  },
-  {
-    id: 3,
-    name: "Crystal Award",
-    price: 149.99,
-    stock: 12,
-    status: "active",
-    category: "Awards",
-  },
-  {
-    id: 4,
-    name: "Bronze Trophy",
-    price: 79.99,
-    stock: 67,
-    status: "active",
-    category: "Awards",
-  },
-  {
-    id: 5,
-    name: "Silver Medal",
-    price: 69.99,
-    stock: 0,
-    status: "inactive",
-    category: "Medals",
-  },
-];
+import { EditProductForm } from "../forms/ProductForm";
+
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
 
 export function ProductsPage() {
-  const [products, setProducts] = useState(initialProducts);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(""); // New state for filtering
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState();
-  const [deleteProduct, setDeleteProduct] = useState();
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [deleteProduct, setDeleteProduct] = useState(null);
   const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  const handleCreate = (data) => {
-    const newProduct = {
-      ...data,
-      id: Math.max(...products.map((p) => p.id)) + 1,
-    };
-    setProducts([...products, newProduct]);
+  // Fetch categories and products
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+
+      const [{ data: cats, error: catErr }, { data: prods, error: prodErr }] =
+        await Promise.all([
+          supabase.from("categories").select("id, name").order("name"),
+          supabase
+            .from("products")
+            .select("*")
+            .order("created_at", { ascending: false }),
+        ]);
+
+      if (catErr) {
+        toast({ title: "Failed to fetch categories", variant: "destructive" });
+      } else {
+        setCategories(cats || []);
+      }
+
+      if (prodErr) {
+        toast({ title: "Failed to fetch products", variant: "destructive" });
+      } else {
+        setProducts(prods || []);
+      }
+
+      setLoading(false);
+    }
+
+    fetchData();
+  }, [toast]);
+
+  // Helper to count currently featured products except the one being edited
+  const getFeaturedCountExcluding = (excludeProductId = null) =>
+    products.filter((p) => p.featured && p.id !== excludeProductId).length;
+
+  // Edit product handler
+  const handleEdit = async (data) => {
+    if (!editingProduct) return;
+
+    // Check featured limit if enabling featured flag
+    const featuredCount = getFeaturedCountExcluding(editingProduct.id);
+    if (data.featured && !editingProduct.featured && featuredCount >= 4) {
+      toast({
+        title: "Featured Products Limit Reached",
+        description: "Only 4 products can be featured at a time.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("products")
+      .update(data)
+      .eq("id", editingProduct.id);
+
+    if (error) {
+      toast({
+        title: "Failed to update product",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setProducts(
+      products.map((p) => (p.id === editingProduct.id ? { ...p, ...data } : p))
+    );
+    setEditingProduct(null);
     setIsFormOpen(false);
-    toast({ title: "Product created successfully" });
+    toast({ title: "Product updated successfully" });
   };
 
-  const handleEdit = (data) => {
-    if (editingProduct) {
-      setProducts(
-        products.map((p) =>
-          p.id === editingProduct.id ? { ...p, ...data } : p
-        )
-      );
-      setEditingProduct(undefined);
-      toast({ title: "Product updated successfully" });
+  // Delete product handler
+  const handleDelete = async () => {
+    if (!deleteProduct) return;
+
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", deleteProduct.id);
+
+    if (error) {
+      toast({
+        title: "Failed to delete product",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
     }
+
+    setProducts(products.filter((p) => p.id !== deleteProduct.id));
+    setDeleteProduct(null);
+    toast({ title: "Product deleted successfully" });
   };
 
-  const handleDelete = () => {
-    if (deleteProduct) {
-      setProducts(products.filter((p) => p.id !== deleteProduct.id));
-      setDeleteProduct(undefined);
-      toast({ title: "Product deleted successfully" });
-    }
-  };
+  // Filter products by selected category if any selected
+  const filteredProducts = selectedCategoryId
+    ? products.filter((p) => p.category_id === selectedCategoryId)
+    : products;
 
   return (
     <div className="space-y-6">
+      {/* Header and Add button */}
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Products</h1>
-          <p className="text-muted-foreground">Manage your product inventory</p>
-        </div>
+        <h1 className="text-3xl font-bold text-foreground">Products</h1>
+        {/* Navigate to separate Add Product page */}
         <Button
-          onClick={() => setIsFormOpen(true)}
+          onClick={() => navigate("/admin/products/add-product")}
           className="bg-primary hover:bg-primary-hover text-primary-foreground"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -119,116 +155,150 @@ export function ProductsPage() {
         </Button>
       </div>
 
+      {/* Category Filter Dropdown */}
+      <div className="mb-4 max-w-xs">
+        <label
+          htmlFor="category-filter"
+          className="block mb-1 font-medium text-gray-700"
+        >
+          Filter by Category
+        </label>
+        <select
+          id="category-filter"
+          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+          value={selectedCategoryId}
+          onChange={(e) => setSelectedCategoryId(e.target.value)}
+        >
+          <option value="">All Categories</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Product list */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-card-foreground">Product List</CardTitle>
+          <CardTitle>Product Inventory</CardTitle>
           <CardDescription>
-            You have {products.length} products in your inventory.
+            Showing {filteredProducts.length}{" "}
+            {selectedCategoryId
+              ? `product${filteredProducts.length !== 1 ? "s" : ""} in ${
+                  categories.find((c) => c.id === selectedCategoryId)?.name ||
+                  ""
+                }`
+              : `product${
+                  filteredProducts.length !== 1 ? "s" : ""
+                } in all categories`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-border bg-surface-light"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-surface-medium rounded-lg flex items-center justify-center">
-                    <span className="text-lg font-bold text-primary">
-                      {product.name.charAt(0)}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">
-                      {product.name}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {product.category}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-6">
-                  <div className="text-center">
-                    <p className="font-medium text-foreground">
-                      ${product.price}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Price</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="font-medium text-foreground">
-                      {product.stock}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Stock</p>
-                  </div>
-                  <Badge
-                    variant={
-                      product.status === "active" ? "default" : "secondary"
-                    }
-                    className={
-                      product.status === "active"
-                        ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                        : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
-                    }
-                  >
-                    {product.status}
-                  </Badge>
-                  <div className="flex space-x-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setEditingProduct(product)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive"
-                      onClick={() => setDeleteProduct(product)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <p className="text-center py-10">Loading products...</p>
+          ) : filteredProducts.length === 0 ? (
+            <p className="text-center py-10 text-muted-foreground">
+              No products found.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {filteredProducts.map((product) => (
+                <Card
+                  key={product.id}
+                  className="bg-surface-light border-border"
+                >
+                  <CardHeader className="flex justify-between items-center">
+                    <div>
+                      <CardTitle>{product.title}</CardTitle>
+                      <CardDescription className="text-muted-foreground">
+                        Category:{" "}
+                        {categories.find(
+                          (cat) => cat.id === product.category_id
+                        )?.name || "Uncategorized"}
+                      </CardDescription>
+                    </div>
+                    {product.featured && (
+                      <Badge variant="secondary" className="text-yellow-600">
+                        Featured
+                      </Badge>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    <p className="mb-2">{product.description}</p>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-lg font-semibold">
+                          ${product.price.toFixed(2)}
+                        </p>
+                        <p className="text-sm">
+                          {product.in_stock ? "In Stock" : "Out of Stock"}
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setEditingProduct(product);
+                            setIsFormOpen(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive"
+                          onClick={() => setDeleteProduct(product)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Dialog for Edit Product only */}
       <Dialog
-        open={isFormOpen || !!editingProduct}
-        onOpenChange={() => {
-          setIsFormOpen(false);
-          setEditingProduct(undefined);
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsFormOpen(false);
+            setEditingProduct(null);
+          }
         }}
       >
-        <DialogContent>
-          <ProductForm
-            product={editingProduct}
-            onSubmit={editingProduct ? handleEdit : handleCreate}
-            onCancel={() => {
-              setIsFormOpen(false);
-              setEditingProduct(undefined);
-            }}
-          />
+        <DialogContent className="max-h-[80vh] overflow-y-auto p-6">
+          {editingProduct && (
+            <EditProductForm
+              product={editingProduct}
+              categories={categories}
+              onSubmit={handleEdit}
+              onCancel={() => {
+                setIsFormOpen(false);
+                setEditingProduct(null);
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
+      {/* AlertDialog for Delete Confirmation */}
       <AlertDialog
         open={!!deleteProduct}
-        onOpenChange={() => setDeleteProduct(undefined)}
+        onOpenChange={() => setDeleteProduct(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Product</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deleteProduct?.name}"? This
+              Are you sure you want to delete "{deleteProduct?.title}"? This
               action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -14,6 +14,7 @@ import { UsersPage } from "./pages/UsersPage";
 import { MessagesPage } from "./pages/MessagesPage";
 import { PaymentsPage } from "./pages/PaymentsPage";
 import { MediaPage } from "./pages/MediaPage";
+import AddProductPage from "./pages/AddProductPage";
 import { cn } from "@/lib/utils";
 
 export function AdminDashboard() {
@@ -50,6 +51,10 @@ export function AdminDashboard() {
                 <Routes>
                   <Route path="/" element={<DashboardOverview />} />
                   <Route path="/dashboard" element={<DashboardOverview />} />
+                  <Route
+                    path="/products/add-product"
+                    element={<AddProductPage />}
+                  />
                   <Route path="/products/*" element={<ProductsPage />} />
                   <Route path="/categories/*" element={<CategoriesPage />} />
                   <Route path="/orders/*" element={<OrdersPage />} />

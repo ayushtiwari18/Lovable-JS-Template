@@ -31,7 +31,7 @@ export function CategoriesPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
 
-  // Fetch categories (including image, price)
+  // Fetch categories and product counts
   useEffect(() => {
     async function fetchCategories() {
       setLoading(true);
@@ -39,8 +39,6 @@ export function CategoriesPage() {
         id,
         name,
         slug,
-        image,
-        price,
         products:products(id)
       `);
 
@@ -54,8 +52,6 @@ export function CategoriesPage() {
         id: category.id,
         name: category.name,
         slug: category.slug,
-        image: category.image,
-        price: category.price,
         products: category.products ? category.products.length : 0,
       }));
 
@@ -107,23 +103,52 @@ export function CategoriesPage() {
     toast({ title: "Category updated successfully" });
   };
 
-  // Delete category handler
+  // Delete category and all related products handler
   const handleDelete = async () => {
     if (!deleteCategory) return;
 
-    const { error } = await supabase
-      .from("categories")
-      .delete()
-      .eq("id", deleteCategory.id);
+    try {
+      // 1. Delete all products associated with the category
+      const { error: productDeleteError } = await supabase
+        .from("products")
+        .delete()
+        .eq("category_id", deleteCategory.id);
 
-    if (error) {
-      toast({ title: "Failed to delete category", variant: "destructive" });
-      return;
+      if (productDeleteError) {
+        toast({
+          title: "Failed to delete products",
+          description: productDeleteError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 2. Delete the category
+      const { error: categoryDeleteError } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", deleteCategory.id);
+
+      if (categoryDeleteError) {
+        toast({
+          title: "Failed to delete category",
+          description: categoryDeleteError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Update local state to remove deleted category
+      setCategories(categories.filter((c) => c.id !== deleteCategory.id));
+      setDeleteCategory(null);
+      toast({ title: "Category and its products deleted successfully" });
+    } catch (error) {
+      toast({
+        title: "Deletion error",
+        description: error.message || "An error occurred during deletion",
+        variant: "destructive",
+      });
     }
-
-    setCategories(categories.filter((c) => c.id !== deleteCategory.id));
-    setDeleteCategory(null);
-    toast({ title: "Category deleted successfully" });
   };
 
   return (
@@ -138,8 +163,8 @@ export function CategoriesPage() {
         </div>
         <Button
           onClick={() => {
-            setEditingCategory(null); // Clear editing state
-            setIsFormOpen(true); // Open dialog for add
+            setEditingCategory(null);
+            setIsFormOpen(true);
           }}
           className="bg-primary hover:bg-primary-hover text-primary-foreground"
         >
@@ -171,34 +196,14 @@ export function CategoriesPage() {
                       <Package className="h-8 w-8 text-primary" />
                     </div>
                     <CardTitle className="text-lg">{category.name}</CardTitle>
-                    <CardDescription className="text-sm">
-                      Slug: <span className="font-mono">{category.slug}</span>
+                    <CardDescription>
+                      You have {category.products} products.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {/* Image */}
-                    {category.image && (
-                      <div className="mb-3 flex justify-center">
-                        <img
-                          src={category.image}
-                          alt={category.name}
-                          style={{
-                            width: 96,
-                            height: 96,
-                            objectFit: "cover",
-                            borderRadius: 8,
-                            border: "1px solid #eee",
-                          }}
-                        />
-                      </div>
-                    )}
-                    {/* Price */}
-                    <div className="mb-2 text-lg font-semibold text-primary">
-                      {category.price ? `₹${category.price}` : "No price"}
-                    </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-2xl font-bold">
+                        <p className="text-2xl font-bold text-foreground">
                           {category.products}
                         </p>
                         <p className="text-sm text-muted-foreground">
@@ -274,6 +279,7 @@ export function CategoriesPage() {
             <AlertDialogTitle>Delete Category</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{deleteCategory?.name}"? This
+              will also delete all products belonging to this category. This
               action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

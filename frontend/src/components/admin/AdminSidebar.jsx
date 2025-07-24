@@ -38,10 +38,7 @@ const menuItems = [
   {
     title: "Products",
     icon: Package,
-    items: [
-      { title: "All Products", url: "/admin/products" },
-      { title: "Add Product", url: "/admin/products/add" },
-    ],
+    url: "/admin/products",
   },
   {
     title: "Categories",
