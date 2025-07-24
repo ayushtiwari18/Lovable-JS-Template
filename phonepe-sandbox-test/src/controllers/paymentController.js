@@ -28,7 +28,21 @@ class PaymentController {
       }
 
       console.log("✅ Validation passed");
+      // INDUSTRY STANDARD: Dynamic URL generation
+      const getBaseUrl = (req) => {
+        const protocol =
+          req.secure || req.headers["x-forwarded-proto"] === "https"
+            ? "https"
+            : "http";
+        const host = req.headers["x-forwarded-host"] || req.headers.host;
+        return `${protocol}://${host}`;
+      };
 
+      const baseUrl = getBaseUrl(req);
+      const redirectUrl = `${baseUrl}/redirect`;
+      const callbackUrl = `${baseUrl}/callback`;
+
+      console.log("🔗 Generated URLs:", { redirectUrl, callbackUrl });
       // *** STEP 1: FIND EXISTING ORDER (don't create new one) ***
       try {
         const { supabaseAdmin } = require("../config/supabaseClient");
@@ -96,9 +110,9 @@ class PaymentController {
         process.env.PHONEPE_BASE_URL ||
         "https://api-preprod.phonepe.com/apis/pg-sandbox";
 
-      // Generate callback and redirect URLs
-      const redirectUrl = `${req.protocol}://${req.get("host")}/redirect`;
-      const callbackUrl = `${req.protocol}://${req.get("host")}/callback`;
+      // // Generate callback and redirect URLs
+      // const redirectUrl = `${req.protocol}://${req.get("host")}/redirect`;
+      // const callbackUrl = `${req.protocol}://${req.get("host")}/callback`;
 
       console.log("🔗 URLs:", { redirectUrl, callbackUrl });
 

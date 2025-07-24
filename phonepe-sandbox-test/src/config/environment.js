@@ -5,6 +5,16 @@ const config = {
   PORT: process.env.PORT || 3000,
   NODE_ENV: process.env.NODE_ENV || "development",
 
+  // Force HTTPS in production
+  FORCE_HTTPS: process.env.NODE_ENV === "production",
+
+  // Domain configuration
+  BACKEND_DOMAIN:
+    process.env.NODE_ENV === "production"
+      ? "shrifal-handicrafts-api.onrender.com"
+      : "localhost",
+
+      
   // Frontend URLs
   FRONTEND_URL:
     process.env.NODE_ENV === "production"

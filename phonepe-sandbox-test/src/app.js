@@ -15,8 +15,15 @@ const productRoutes = require("./routes/products");
 const userRoutes = require("./routes/users");
 const uploadRoutes = require("./routes/upload");
 const categoryRoutes = require("./routes/categories");
+const httpsRedirect = require("./middleware/httpsRedirect");
 
 const app = express();
+
+// Trust proxy - CRITICAL for Render/Netlify deployments
+app.set('trust proxy', true);
+// app.js
+
+app.use(httpsRedirect);
 
 // Security middleware
 app.use(
