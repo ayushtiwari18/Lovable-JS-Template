@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,8 +50,9 @@ import { supabase } from "@/lib/supabaseClient";
 
 export function ProductsPage() {
   const [products, setProducts] = useState([]);
+  const [variantsMap, setVariantsMap] = useState({}); // Variants keyed by product_id
   const [categories, setCategories] = useState([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState("grid"); // grid or list
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -61,47 +62,69 @@ export function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Fetch categories and products
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
+  // Fetch products, categories and variants - extracted into a reusable function
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Fetch categories
+      const { data: cats, error: catErr } = await supabase
+        .from("categories")
+        .select("id, name")
+        .order("name");
+      if (catErr) throw catErr;
+      setCategories(cats || []);
 
-      const [{ data: cats, error: catErr }, { data: prods, error: prodErr }] =
-        await Promise.all([
-          supabase.from("categories").select("id, name").order("name"),
-          supabase
-            .from("products")
-            .select("*")
-            .order("created_at", { ascending: false }),
-        ]);
+      // Fetch products ONLY (no variants!)
+      const { data: prods, error: prodErr } = await supabase
+        .from("products")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (prodErr) throw prodErr;
 
-      if (catErr) {
-        toast({ title: "Failed to fetch categories", variant: "destructive" });
+      setProducts(prods || []);
+
+      // Fetch variants only for fetched product ids
+      const productIds = prods?.map((p) => p.id) || [];
+      if (productIds.length > 0) {
+        const { data: vars, error: varErr } = await supabase
+          .from("product_variants")
+          .select("id, product_id, size_code, price, stock_quantity")
+          .in("product_id", productIds);
+        if (varErr) throw varErr;
+
+        // Map variants by product_id
+        const map = {};
+        vars.forEach((v) => {
+          if (!map[v.product_id]) map[v.product_id] = [];
+          map[v.product_id].push(v);
+        });
+        setVariantsMap(map);
       } else {
-        setCategories(cats || []);
+        setVariantsMap({});
       }
-
-      if (prodErr) {
-        toast({ title: "Failed to fetch products", variant: "destructive" });
-      } else {
-        setProducts(prods || []);
-      }
-
-      setLoading(false);
+    } catch (error) {
+      toast({
+        title: "Failed to fetch data",
+        description: error.message,
+        variant: "destructive",
+      });
     }
-
-    fetchData();
+    setLoading(false);
   }, [toast]);
 
-  // Helper to count currently featured products except the one being edited
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Helper to count featured excluding an optional product id
   const getFeaturedCountExcluding = (excludeProductId = null) =>
     products.filter((p) => p.featured && p.id !== excludeProductId).length;
 
-  // Edit product handler
+  // Handler to update product information after edit (called from EditProductForm)
   const handleEdit = async (data) => {
     if (!editingProduct) return;
-
-    // Check featured limit if enabling featured flag
+    // Check featured limit
     const featuredCount = getFeaturedCountExcluding(editingProduct.id);
     if (data.featured && !editingProduct.featured && featuredCount >= 4) {
       toast({
@@ -126,47 +149,62 @@ export function ProductsPage() {
       return;
     }
 
-    setProducts(
-      products.map((p) => (p.id === editingProduct.id ? { ...p, ...data } : p))
-    );
+    // Re-fetch data to keep UI in sync (product + variants)
+    await fetchData();
+
     setEditingProduct(null);
     setIsFormOpen(false);
     toast({ title: "Product updated successfully" });
   };
 
-  // Delete product handler
+  // Handler to delete product (and its variants)
   const handleDelete = async () => {
     if (!deleteProduct) return;
+    setLoading(true);
 
-    const { error } = await supabase
-      .from("products")
-      .delete()
-      .eq("id", deleteProduct.id);
+    try {
+      // Delete variants first
+      const { error: variantDelError } = await supabase
+        .from("product_variants")
+        .delete()
+        .eq("product_id", deleteProduct.id);
 
-    if (error) {
+      if (variantDelError) throw variantDelError;
+
+      // Delete product
+      const { error: prodDelError } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", deleteProduct.id);
+
+      if (prodDelError) throw prodDelError;
+
+      // Refresh data (products + variants)
+      await fetchData();
+
+      setDeleteProduct(null);
+      toast({ title: "Product and its variants deleted successfully" });
+    } catch (error) {
       toast({
         title: "Failed to delete product",
         description: error.message,
         variant: "destructive",
       });
-      return;
     }
-
-    setProducts(products.filter((p) => p.id !== deleteProduct.id));
-    setDeleteProduct(null);
-    toast({ title: "Product deleted successfully" });
+    setLoading(false);
   };
 
-  // Refresh data
+  // Refresh page (optional, reload data)
   const handleRefresh = () => {
-    window.location.reload();
+    fetchData();
   };
 
-  // Filter products by selected category and search term
+  // Filter products by category and search term
   const filteredProducts = products.filter((product) => {
-    const matchesCategory = selectedCategoryId
-      ? product.category_id === selectedCategoryId
-      : true;
+    const matchesCategory =
+      selectedCategoryId && selectedCategoryId !== "all"
+        ? product.category_id === selectedCategoryId
+        : true;
     const matchesSearch = searchTerm
       ? product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -174,7 +212,7 @@ export function ProductsPage() {
     return matchesCategory && matchesSearch;
   });
 
-  // Get stats
+  // Stats for display
   const totalProducts = products.length;
   const featuredProducts = products.filter((p) => p.featured).length;
   const inStockProducts = products.filter((p) => p.in_stock).length;
@@ -218,7 +256,7 @@ export function ProductsPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -266,7 +304,7 @@ export function ProductsPage() {
         </Card>
       </div>
 
-      {/* Filters and Search */}
+      {/* Filters & Search */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -293,7 +331,7 @@ export function ProductsPage() {
             {/* Category Filter */}
             <div className="space-y-2 min-w-[200px]">
               <label className="text-sm font-medium">Filter by Category</label>
-              // In your ProductsPage component, update the Select component:
+
               <Select
                 value={selectedCategoryId}
                 onValueChange={setSelectedCategoryId}
@@ -302,8 +340,7 @@ export function ProductsPage() {
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>{" "}
-                  {/* ✅ Use "all" instead of "" */}
+                  <SelectItem value="all">All Categories</SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       {cat.name}
@@ -338,16 +375,17 @@ export function ProductsPage() {
           </div>
 
           {/* Active Filters Display */}
-          {(selectedCategoryId || searchTerm) && (
+          {(selectedCategoryId && selectedCategoryId !== "all") ||
+          searchTerm ? (
             <div className="flex items-center gap-2 mt-4 pt-4 border-t">
               <span className="text-sm text-muted-foreground">
                 Active filters:
               </span>
-              {selectedCategoryId && (
+              {selectedCategoryId && selectedCategoryId !== "all" && (
                 <Badge variant="secondary" className="gap-1">
                   {categories.find((c) => c.id === selectedCategoryId)?.name}
                   <button
-                    onClick={() => setSelectedCategoryId("")}
+                    onClick={() => setSelectedCategoryId("all")}
                     className="ml-1 hover:bg-muted rounded-full p-0.5"
                   >
                     ×
@@ -366,11 +404,11 @@ export function ProductsPage() {
                 </Badge>
               )}
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
-      {/* Product list */}
+      {/* Products list */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
@@ -380,7 +418,7 @@ export function ProductsPage() {
             </Badge>
           </CardTitle>
           <CardDescription>
-            {selectedCategoryId
+            {selectedCategoryId && selectedCategoryId !== "all"
               ? `Showing products in ${
                   categories.find((c) => c.id === selectedCategoryId)?.name ||
                   ""
@@ -399,12 +437,15 @@ export function ProductsPage() {
                   ? "Try adjusting your filters or search terms"
                   : "Get started by adding your first product"}
               </p>
-              {!searchTerm && !selectedCategoryId && (
-                <Button onClick={() => navigate("/admin/products/add-product")}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Your First Product
-                </Button>
-              )}
+              {!searchTerm &&
+                (!selectedCategoryId || selectedCategoryId === "all") && (
+                  <Button
+                    onClick={() => navigate("/admin/products/add-product")}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Your First Product
+                  </Button>
+                )}
             </div>
           ) : (
             <div
@@ -421,85 +462,120 @@ export function ProductsPage() {
                     viewMode === "list" ? "flex flex-row" : ""
                   }`}
                 >
-                  <div className={viewMode === "list" ? "flex-1" : ""}>
-                    <CardHeader
-                      className={`${viewMode === "list" ? "pb-2" : ""}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg">
-                            {product.title}
-                          </CardTitle>
-                          <CardDescription className="text-sm">
-                            {categories.find(
-                              (cat) => cat.id === product.category_id
-                            )?.name || "Uncategorized"}
-                          </CardDescription>
-                        </div>
-                        <div className="flex gap-1">
-                          {product.featured && (
-                            <Badge
-                              variant="secondary"
-                              className="bg-yellow-100 text-yellow-800 gap-1"
-                            >
-                              <Star className="h-3 w-3" />
-                              Featured
-                            </Badge>
-                          )}
-                          <Badge
-                            variant={
-                              product.in_stock ? "default" : "destructive"
-                            }
-                          >
-                            {product.in_stock ? "In Stock" : "Out of Stock"}
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                        {product.description}
-                      </p>
+                  <div className={viewMode === "list" ? "flex-1 flex" : ""}>
+                    {product.image_url && (
+                      <img
+                        src={product.image_url}
+                        alt={`Image of ${product.title}`}
+                        className={`rounded-md shadow-sm border object-cover ${
+                          viewMode === "list"
+                            ? "w-40 h-28 mr-4 flex-shrink-0"
+                            : "w-full h-48 mb-4"
+                        }`}
+                      />
+                    )}
 
-                      <div
-                        className={`flex ${
-                          viewMode === "list" ? "flex-row" : "flex-col"
-                        } justify-between items-${
-                          viewMode === "list" ? "center" : "start"
-                        } gap-4`}
+                    <div className="flex flex-col flex-1">
+                      <CardHeader
+                        className={`${viewMode === "list" ? "pb-2" : ""}`}
                       >
-                        <div className="flex items-center gap-1">
-                          <IndianRupee className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-xl font-bold">
-                            {product.price.toFixed(2)}
-                          </span>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <CardTitle className="text-lg">
+                              {product.title}
+                            </CardTitle>
+                            <CardDescription className="text-sm">
+                              {categories.find(
+                                (cat) => cat.id === product.category_id
+                              )?.name || "Uncategorized"}
+                            </CardDescription>
+                          </div>
+                          <div className="flex gap-1">
+                            {product.featured && (
+                              <Badge
+                                variant="secondary"
+                                className="bg-yellow-100 text-yellow-800 gap-1"
+                              >
+                                <Star className="h-3 w-3" />
+                                Featured
+                              </Badge>
+                            )}
+                            <Badge
+                              variant={
+                                product.in_stock ? "default" : "destructive"
+                              }
+                            >
+                              {product.in_stock ? "In Stock" : "Out of Stock"}
+                            </Badge>
+                          </div>
                         </div>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                          {product.description}
+                        </p>
 
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setEditingProduct(product);
-                              setIsFormOpen(true);
-                            }}
-                            className="hover:bg-blue-50 hover:border-blue-300"
-                          >
-                            <Edit className="h-4 w-4 mr-1" />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-destructive hover:bg-red-50 hover:border-red-300"
-                            onClick={() => setDeleteProduct(product)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            Delete
-                          </Button>
+                        {/* Display product variants (sizes) inside card */}
+                        {variantsMap[product.id] &&
+                          variantsMap[product.id].length > 0 && (
+                            <div className="mb-4">
+                              <h4 className="font-semibold mb-1">
+                                Available Sizes:
+                              </h4>
+                              <ul className="flex flex-wrap gap-3 text-sm">
+                                {variantsMap[product.id].map((variant) => (
+                                  <li
+                                    key={variant.id}
+                                    className="bg-gray-100 px-3 py-1 rounded-full border border-gray-300"
+                                  >
+                                    {variant.size_code} — ₹
+                                    {variant.price.toFixed(2)}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                        <div
+                          className={`flex ${
+                            viewMode === "list" ? "flex-row" : "flex-col"
+                          } justify-between items-${
+                            viewMode === "list" ? "center" : "start"
+                          } gap-4`}
+                        >
+                          <div className="flex items-center gap-1">
+                            <IndianRupee className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xl font-bold">
+                              {product.price.toFixed(2)}
+                            </span>
+                          </div>
+
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingProduct(product);
+                                setIsFormOpen(true);
+                              }}
+                              className="hover:bg-blue-50 hover:border-blue-300"
+                            >
+                              <Edit className="h-4 w-4 mr-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-destructive hover:bg-red-50 hover:border-red-300"
+                              onClick={() => setDeleteProduct(product)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
+                      </CardContent>
+                    </div>
                   </div>
                 </Card>
               ))}
@@ -508,7 +584,7 @@ export function ProductsPage() {
         </CardContent>
       </Card>
 
-      {/* Dialog for Edit Product only */}
+      {/* Edit Product Dialog */}
       <Dialog
         open={isFormOpen}
         onOpenChange={(open) => {
@@ -523,7 +599,7 @@ export function ProductsPage() {
             <EditProductForm
               product={editingProduct}
               categories={categories}
-              onSubmit={handleEdit}
+              onSubmit={handleEdit} // passes updated product to handleEdit (includes refetch)
               onCancel={() => {
                 setIsFormOpen(false);
                 setEditingProduct(null);
@@ -533,7 +609,7 @@ export function ProductsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* AlertDialog for Delete Confirmation */}
+      {/* Delete Confirmation Dialog */}
       <AlertDialog
         open={!!deleteProduct}
         onOpenChange={() => setDeleteProduct(null)}
@@ -543,8 +619,8 @@ export function ProductsPage() {
             <AlertDialogTitle>Delete Product</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{deleteProduct?.title}"? This
-              action cannot be undone and will remove the product from your
-              catalog.
+              action cannot be undone and will remove the product and all
+              related variants.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

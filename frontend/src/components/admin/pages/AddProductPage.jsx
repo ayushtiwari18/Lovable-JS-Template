@@ -27,6 +27,10 @@ export default function AddProductPage() {
     image_upload: false,
   });
   const [catalogNumber, setCatalogNumber] = useState("");
+  // Variants (maximum 3)
+  const [variants, setVariants] = useState([
+    { size: "", price: "", stock_quantity: "" },
+  ]);
 
   useEffect(() => {
     async function fetchCategories() {
@@ -34,23 +38,19 @@ export default function AddProductPage() {
         .from("categories")
         .select("id, name")
         .order("name");
-
       if (error) {
         toast({ title: "Failed to load categories", variant: "destructive" });
       } else {
         setCategories(data || []);
       }
     }
-
     async function fetchFeaturedCount() {
       const { count, error } = await supabase
         .from("products")
         .select("*", { count: "exact", head: true })
         .eq("featured", true);
-
       if (!error) setFeaturedCount(count);
     }
-
     fetchCategories();
     fetchFeaturedCount();
   }, [toast]);
@@ -65,9 +65,30 @@ export default function AddProductPage() {
     setUploading(true);
   };
 
+  const handleVariantChange = (idx, field, value) => {
+    setVariants((current) =>
+      current.map((v, i) => (i === idx ? { ...v, [field]: value } : v))
+    );
+  };
+
+  const addVariant = () => {
+    if (variants.length < 3) {
+      setVariants([...variants, { size: "", price: "", stock_quantity: "" }]);
+    }
+  };
+
+  const removeVariant = (idx) => {
+    if (variants.length > 1) {
+      setVariants(variants.filter((_, i) => i !== idx));
+    }
+  };
+
+  const handleCustomizableFieldChange = (field) => (e) => {
+    setCustomizableFields((prev) => ({ ...prev, [field]: e.target.checked }));
+  };
+
   const validateAndSubmit = async (e) => {
     e.preventDefault();
-
     if (!title.trim()) {
       toast({
         title: "Validation Error",
@@ -102,6 +123,35 @@ export default function AddProductPage() {
       return;
     }
 
+    // Validate variants
+    if (
+      variants.some(
+        (v) =>
+          !v.size ||
+          !v.price ||
+          Number(v.price) <= 0 ||
+          !v.stock_quantity ||
+          Number(v.stock_quantity) < 0
+      )
+    ) {
+      toast({
+        title: "Validation Error",
+        description:
+          "Each variant must have size, price (>0), and stock quantity (>=0).",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (variants.length > 3) {
+      toast({
+        title: "Validation Error",
+        description: "You can add a maximum of 3 sizes only.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Insert main product
     const newProduct = {
       title: title.trim(),
       description: description.trim(),
@@ -114,8 +164,11 @@ export default function AddProductPage() {
       catalog_number: catalogNumber.trim(),
       created_at: new Date().toISOString(),
     };
-
-    const { error } = await supabase.from("products").insert([newProduct]);
+    const { data: prodData, error } = await supabase
+      .from("products")
+      .insert([newProduct])
+      .select()
+      .single();
 
     if (error) {
       toast({
@@ -123,235 +176,341 @@ export default function AddProductPage() {
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({ title: "Product added successfully" });
-      navigate("/admin/products");
+      return;
     }
+
+    // Insert variants (sizes) to product_variants table
+    const variantsToInsert = variants.map((v) => ({
+      product_id: prodData.id,
+      size_code: v.size,
+      price: parseFloat(v.price),
+      stock_quantity: Number(v.stock_quantity),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
+    const { error: variantErr } = await supabase
+      .from("product_variants")
+      .insert(variantsToInsert);
+
+    if (variantErr) {
+      toast({
+        title: "Failed to add product variants",
+        description: variantErr.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "Product added successfully" });
+    navigate("/admin/products");
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6 bg-white rounded-lg shadow-md">
-      <h1 className="text-3xl font-bold mb-8 text-center text-gray-900">
+    <form
+      onSubmit={validateAndSubmit}
+      className="max-w-3xl mx-auto p-8 bg-white rounded-lg shadow-md space-y-8"
+      noValidate
+    >
+      <h2 className="text-3xl font-semibold text-gray-800 mb-6">
         Add New Product
-      </h1>
-      <form onSubmit={validateAndSubmit} className="space-y-6">
-        {/* Title */}
-        <div>
-          <Label htmlFor="title" className="font-medium text-gray-700">
-            Title <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Product title"
-            required
-            className="mt-1"
+      </h2>
+
+      {/* Product Title */}
+      <div className="flex flex-col">
+        <Label htmlFor="title" className="mb-1 font-medium text-gray-700">
+          Product Title <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          id="title"
+          placeholder="Enter product title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+          className="placeholder-gray-400"
+        />
+      </div>
+
+      {/* Product Description */}
+      <div className="flex flex-col">
+        <Label htmlFor="description" className="mb-1 font-medium text-gray-700">
+          Description <span className="text-red-500">*</span>
+        </Label>
+        <textarea
+          id="description"
+          rows="4"
+          placeholder="Describe your product..."
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          required
+          className="resize-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+        />
+      </div>
+
+      {/* Base Price */}
+      <div className="flex flex-col">
+        <Label htmlFor="price" className="mb-1 font-medium text-gray-700">
+          Base Price (₹) <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          id="price"
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="Enter base price"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          required
+          className="placeholder-gray-400"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          This is the default price if no variants.
+        </p>
+      </div>
+
+      {/* Category select */}
+      <div className="flex flex-col">
+        <Label htmlFor="category" className="mb-1 font-medium text-gray-700">
+          Category <span className="text-red-500">*</span>
+        </Label>
+        <select
+          id="category"
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          className="border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          required
+        >
+          <option value="" disabled>
+            -- Select a Category --
+          </option>
+          {categories.map((cat) => (
+            <option value={cat.id} key={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Image Upload */}
+      <div className="flex flex-col">
+        <Label className="mb-1 font-medium text-gray-700">Product Image</Label>
+        <div className="w-full max-w-xs">
+          <ImageUpload
+            onUploadSuccess={onUploadSuccess}
+            onUploadStart={handleUploadStart}
           />
-        </div>
-
-        {/* Description */}
-        <div>
-          <Label htmlFor="description" className="font-medium text-gray-700">
-            Description
-          </Label>
-          <textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Product description"
-            rows={5}
-            className="mt-1 w-full border border-gray-300 rounded-md p-3 resize-y
-                       focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition"
-          />
-        </div>
-
-        {/* Price and Category in Two Columns on medium+ screens */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <Label htmlFor="price" className="font-medium text-gray-700">
-              Price <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="price"
-              type="number"
-              min="0"
-              step="0.01"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="e.g. 19.99"
-              required
-              className="mt-1"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="category" className="font-medium text-gray-700">
-              Category <span className="text-red-500">*</span>
-            </Label>
-            <select
-              id="category"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="w-full mt-1 p-3 border border-gray-300 rounded-md
-                         focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition"
-              required
-            >
-              <option value="" disabled>
-                Select a category
-              </option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Image Upload */}
-        <div>
-          <Label className="font-medium text-gray-700 mb-2 block">
-            Product Image
-          </Label>
+          {uploading && (
+            <p className="text-sm text-blue-600 mt-1 animate-pulse">
+              Uploading image...
+            </p>
+          )}
           {imageUrl && (
             <img
               src={imageUrl}
-              alt="Product"
-              className="w-32 h-32 object-cover rounded-md border border-gray-300 mb-3"
+              alt="Uploaded product"
+              className="mt-4 w-32 h-32 object-cover rounded-md shadow-sm border"
             />
           )}
-          <ImageUpload
-            onUploadStart={handleUploadStart}
-            onUploadSuccess={onUploadSuccess}
-            maxFiles={1}
-            accept="image/*"
-          />
-          {uploading && (
-            <p className="text-sm text-gray-500 mt-2">Uploading image...</p>
-          )}
         </div>
+      </div>
 
-        {/* In Stock and Featured checkboxes */}
-        <div className="flex flex-wrap gap-6 mt-4">
-          <div className="flex items-center">
-            <input
-              id="in_stock"
-              type="checkbox"
-              checked={inStock}
-              onChange={(e) => setInStock(e.target.checked)}
-              className="h-5 w-5 text-primary focus:ring-primary border-gray-300 rounded"
-            />
-            <Label
-              htmlFor="in_stock"
-              className="ml-2 text-gray-700 cursor-pointer"
-            >
-              In Stock
-            </Label>
-          </div>
-          <div className="flex items-center">
-            <input
-              id="featured"
-              type="checkbox"
-              checked={featured}
-              disabled={featuredCount >= 4}
-              onChange={(e) => setFeatured(e.target.checked)}
-              className={`h-5 w-5 focus:ring-primary border-gray-300 rounded cursor-pointer ${
-                featuredCount >= 4 ? "cursor-not-allowed opacity-50" : ""
-              }`}
-            />
-            <Label
-              htmlFor="featured"
-              className="ml-2 text-gray-700 cursor-pointer"
-            >
-              Feature this product{" "}
-              {featuredCount >= 4 && (
-                <span className="text-red-500 font-medium">
-                  {" "}
-                  (Limit reached: 4)
-                </span>
-              )}
-            </Label>
-          </div>
-        </div>
-
-        {/* Customizable Fields - checkboxes */}
-        <fieldset className="border border-gray-300 rounded-md p-4 mt-6">
-          <legend className="text-gray-700 font-semibold px-2">
-            Customizable Fields
-          </legend>
-          <div className="flex flex-wrap gap-6 mt-2">
-            <div className="flex items-center">
-              <input
-                id="custom_text_input"
-                type="checkbox"
-                checked={customizableFields.text_input}
-                onChange={(e) =>
-                  setCustomizableFields((prev) => ({
-                    ...prev,
-                    text_input: e.target.checked,
-                  }))
-                }
-                className="h-5 w-5 text-primary focus:ring-primary border-gray-300 rounded cursor-pointer"
-              />
+      {/* Sizes & Variants */}
+      <fieldset className="border border-gray-300 rounded-md p-4">
+        <legend className="text-lg font-semibold text-gray-700 mb-4">
+          Sizes & Variants (max 3)
+        </legend>
+        {variants.map((variant, idx) => (
+          <div
+            key={idx}
+            className="mb-4 flex flex-wrap gap-4 items-end border p-4 rounded-md shadow-sm"
+          >
+            <div className="flex-1 min-w-[6rem]">
               <Label
-                htmlFor="custom_text_input"
-                className="ml-2 text-gray-700 cursor-pointer"
+                htmlFor={`size-${idx}`}
+                className="block mb-1 font-medium text-gray-600"
               >
-                Text Input
+                Size <span className="text-red-500">*</span>
               </Label>
-            </div>
-            <div className="flex items-center">
-              <input
-                id="custom_image_upload"
-                type="checkbox"
-                checked={customizableFields.image_upload}
+              <Input
+                id={`size-${idx}`}
+                placeholder="e.g. 6, 6.5, 7"
+                value={variant.size}
                 onChange={(e) =>
-                  setCustomizableFields((prev) => ({
-                    ...prev,
-                    image_upload: e.target.checked,
-                  }))
+                  handleVariantChange(idx, "size", e.target.value)
                 }
-                className="h-5 w-5 text-primary focus:ring-primary border-gray-300 rounded cursor-pointer"
+                required
+                className="placeholder-gray-400"
               />
-              <Label
-                htmlFor="custom_image_upload"
-                className="ml-2 text-gray-700 cursor-pointer"
-              >
-                Image Upload
-              </Label>
             </div>
+
+            <div className="flex-1 min-w-[8rem]">
+              <Label
+                htmlFor={`price-${idx}`}
+                className="block mb-1 font-medium text-gray-600"
+              >
+                Price (₹) <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id={`price-${idx}`}
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Price for size"
+                value={variant.price}
+                onChange={(e) =>
+                  handleVariantChange(idx, "price", e.target.value)
+                }
+                required
+                className="placeholder-gray-400"
+              />
+            </div>
+
+            <div className="flex-1 min-w-[10rem]">
+              <Label
+                htmlFor={`stock-${idx}`}
+                className="block mb-1 font-medium text-gray-600"
+              >
+                Stock Quantity <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id={`stock-${idx}`}
+                type="number"
+                min="0"
+                step="1"
+                placeholder="Stock qty"
+                value={variant.stock_quantity}
+                onChange={(e) =>
+                  handleVariantChange(idx, "stock_quantity", e.target.value)
+                }
+                required
+                className="placeholder-gray-400"
+              />
+            </div>
+
+            {variants.length > 1 && (
+              <div className="flex items-center">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="h-10 px-3 py-2"
+                  onClick={() => removeVariant(idx)}
+                  aria-label={`Remove variant ${idx + 1}`}
+                >
+                  Remove
+                </Button>
+              </div>
+            )}
           </div>
-        </fieldset>
+        ))}
 
-        {/* Catalog Number */}
-        <div>
-          <Label htmlFor="catalog_number" className="font-medium text-gray-700">
-            Catalog Number
-          </Label>
-          <Input
-            id="catalog_number"
-            value={catalogNumber}
-            onChange={(e) => setCatalogNumber(e.target.value)}
-            placeholder="Optional catalog number"
-            className="mt-1"
-          />
-        </div>
-
-        {/* Form actions */}
-        <div className="flex justify-end space-x-4 mt-8">
+        {variants.length < 3 && (
           <Button
             type="button"
+            onClick={addVariant}
+            className="mt-2 w-full sm:w-auto"
             variant="outline"
-            onClick={() => navigate("/admin/products")}
           >
-            Cancel
+            Add Size
           </Button>
-          <Button type="submit" disabled={uploading}>
-            {uploading ? "Uploading..." : "Create Product"}
-          </Button>
+        )}
+      </fieldset>
+
+      {/* In Stock */}
+      <div className="flex items-center space-x-2">
+        <input
+          id="inStock"
+          type="checkbox"
+          checked={inStock}
+          onChange={(e) => setInStock(e.target.checked)}
+          className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+        />
+        <Label
+          htmlFor="inStock"
+          className="font-medium text-gray-700 cursor-pointer"
+        >
+          In Stock
+        </Label>
+      </div>
+
+      {/* Featured */}
+      <div className="flex items-center space-x-2">
+        <input
+          id="featured"
+          type="checkbox"
+          checked={featured}
+          onChange={(e) => setFeatured(e.target.checked)}
+          disabled={featuredCount >= 4 && !featured}
+          className="h-5 w-5 rounded border-gray-300 text-yellow-400 focus:ring-yellow-400"
+        />
+        <Label
+          htmlFor="featured"
+          className="font-medium text-gray-700 cursor-pointer select-none"
+        >
+          Featured (max 4)
+        </Label>
+      </div>
+
+      {/* Customizable Fields */}
+      <fieldset className="border border-gray-300 rounded-md p-4 space-y-4">
+        <legend className="text-lg font-semibold text-gray-700">
+          Customization Options
+        </legend>
+        <div className="flex items-center space-x-2">
+          <input
+            id="custom-text-input"
+            type="checkbox"
+            checked={customizableFields.text_input}
+            onChange={handleCustomizableFieldChange("text_input")}
+            className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <Label
+            htmlFor="custom-text-input"
+            className="font-medium text-gray-700 cursor-pointer"
+          >
+            Allow Custom Text Input
+          </Label>
         </div>
-      </form>
-    </div>
+
+        <div className="flex items-center space-x-2">
+          <input
+            id="custom-image-upload"
+            type="checkbox"
+            checked={customizableFields.image_upload}
+            onChange={handleCustomizableFieldChange("image_upload")}
+            className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <Label
+            htmlFor="custom-image-upload"
+            className="font-medium text-gray-700 cursor-pointer"
+          >
+            Allow Custom Image Upload
+          </Label>
+        </div>
+      </fieldset>
+
+      {/* Catalog Number */}
+      <div className="flex flex-col">
+        <Label
+          htmlFor="catalogNumber"
+          className="mb-1 font-medium text-gray-700"
+        >
+          Catalog Number (optional)
+        </Label>
+        <Input
+          id="catalogNumber"
+          placeholder="Enter catalog number"
+          value={catalogNumber}
+          onChange={(e) => setCatalogNumber(e.target.value)}
+          className="placeholder-gray-400"
+        />
+      </div>
+
+      {/* Submit Button */}
+      <Button
+        type="submit"
+        className="w-full py-3 text-lg font-semibold bg-indigo-600 hover:bg-indigo-700 transition-colors rounded-md shadow-md"
+      >
+        Add Product
+      </Button>
+    </form>
   );
 }
