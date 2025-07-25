@@ -28,6 +28,21 @@ import {
   Box,
   Palette,
   Zap,
+  Plus,
+  Minus,
+  Share2,
+  MessageCircle,
+  Phone,
+  Mail,
+  AlertCircle,
+  Award,
+  Settings,
+  Sparkles,
+  CreditCard,
+  MapPin,
+  Calendar,
+  Package2,
+  Info,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -77,9 +92,6 @@ const formatDimensions = (dimensions) => {
       return `${length}×${width}×${height} ${unit}`;
     } else if (length && width) {
       return `${length}×${width} ${unit}`;
-    } else {
-      // If the object structure is different, convert to string
-      return JSON.stringify(dimensions);
     }
   }
 
@@ -172,10 +184,11 @@ const ProductImage = ({
 
       {currentImageUrl && (
         <img
-          src={getCloudinaryImageUrl(
-            imageUrl,
-            isZoomed && enableZoom ? "zoom" : transformation
-          )}
+          src={
+            isZoomed && enableZoom
+              ? getCloudinaryImageUrl(imageUrl, "zoom")
+              : currentImageUrl
+          }
           alt={alt}
           className={`w-full h-full object-cover transition-all duration-500 cursor-pointer ${
             imageState === "loaded" ? "opacity-100" : "opacity-0"
@@ -218,7 +231,7 @@ const ImageGallery = ({ product, productImages }) => {
 
   return (
     <div className="space-y-4">
-      <div className="aspect-square bg-gray-100 rounded-2xl overflow-hidden border border-gray-200">
+      <div className="aspect-square bg-gray-100 rounded-2xl overflow-hidden border border-gray-200 shadow-lg">
         <ProductImage
           imageUrl={allImages[selectedImage]?.image_url}
           alt={allImages[selectedImage]?.alt_text || product?.title}
@@ -236,7 +249,7 @@ const ImageGallery = ({ product, productImages }) => {
               key={img.id || index}
               className={`aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 border-2 ${
                 selectedImage === index
-                  ? "border-primary ring-2 ring-primary/20"
+                  ? "border-primary ring-2 ring-primary/20 shadow-lg"
                   : "border-transparent hover:border-gray-300"
               }`}
               onClick={() => setSelectedImage(index)}
@@ -264,152 +277,410 @@ const ImageGallery = ({ product, productImages }) => {
   );
 };
 
-// Fixed Product Variants Component
+// Enhanced Product Variants Component
 const ProductVariants = ({ variants, selectedVariant, onVariantSelect }) => {
   if (!variants || variants.length === 0) return null;
 
+  const formatPrice = (priceInPaise) =>
+    ((priceInPaise || 0) / 100).toLocaleString("en-IN");
+
   return (
-    <div className="space-y-4 p-6 bg-gray-50 rounded-2xl border border-gray-200">
+    <div className="space-y-4 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200">
       <div className="flex items-center space-x-2">
-        <Box className="h-5 w-5 text-primary" />
-        <h3 className="font-semibold text-gray-900">Available Variants</h3>
+        <Box className="h-5 w-5 text-blue-600" />
+        <h3 className="font-semibold text-blue-900 text-lg">
+          Available Sizes & Variants
+        </h3>
       </div>
 
-      <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-2">
         {variants.map((variant) => {
           const formattedDimensions = formatDimensions(variant.dimensions);
+          const isSelected = selectedVariant?.id === variant.id;
+          const inStock = (variant.stock_quantity || 0) > 0;
 
           return (
             <div
               key={variant.id}
               className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
-                selectedVariant?.id === variant.id
-                  ? "border-primary bg-primary/5 shadow-md"
-                  : "border-gray-200 hover:border-primary/50 hover:shadow-sm"
+                isSelected
+                  ? "border-blue-600 bg-blue-600/10 shadow-lg ring-2 ring-blue-200"
+                  : inStock
+                  ? "border-gray-200 hover:border-blue-400 hover:shadow-md bg-white"
+                  : "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
               }`}
-              onClick={() => onVariantSelect(variant)}
+              onClick={() => inStock && onVariantSelect(variant)}
             >
               <div className="flex items-center justify-between">
-                <div className="space-y-1">
+                <div className="space-y-2 flex-1">
+                  {/* Size Label */}
                   <div className="flex items-center space-x-2">
-                    <span className="font-medium text-gray-900">
-                      {variant.size_label || "Standard Size"}
+                    <span
+                      className={`font-semibold ${
+                        isSelected ? "text-blue-900" : "text-gray-900"
+                      }`}
+                    >
+                      {variant.size_code || "Standard Size"}
                     </span>
-                    {variant.size_code && (
-                      <Badge variant="outline" className="text-xs">
-                        {variant.size_code}
+                    {isSelected && (
+                      <Badge className="bg-blue-600 text-white text-xs">
+                        Selected
                       </Badge>
                     )}
                   </div>
 
-                  {formattedDimensions && (
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Ruler className="h-3 w-3 mr-1" />
-                      <span>{formattedDimensions}</span>
-                    </div>
-                  )}
+                  {/* Specifications */}
+                  <div className="space-y-1">
+                    {formattedDimensions && (
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Ruler className="h-3 w-3 mr-1.5" />
+                        <span>{formattedDimensions}</span>
+                      </div>
+                    )}
 
-                  {variant.weight_grams && (
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Weight className="h-3 w-3 mr-1" />
-                      <span>{variant.weight_grams}g</span>
-                    </div>
-                  )}
+                    {variant.weight_grams && (
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Weight className="h-3 w-3 mr-1.5" />
+                        <span>{variant.weight_grams}g</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="text-right">
-                  <div className="text-lg font-bold text-primary">
-                    ₹{((variant.price || 0) / 100).toLocaleString("en-IN")}
+                {/* Price and Stock */}
+                <div className="text-right ml-4">
+                  <div
+                    className={`text-lg font-bold ${
+                      isSelected ? "text-blue-600" : "text-gray-900"
+                    }`}
+                  >
+                    ₹{formatPrice(variant.price)}
                   </div>
-                  <div className="flex items-center text-sm">
+                  <div className="flex items-center justify-end text-sm mt-1">
                     <div
-                      className={`w-2 h-2 rounded-full mr-1 ${
-                        (variant.stock_quantity || 0) > 0
-                          ? "bg-green-500"
-                          : "bg-red-500"
+                      className={`w-2 h-2 rounded-full mr-1.5 ${
+                        inStock ? "bg-green-500" : "bg-red-500"
                       }`}
                     />
                     <span
-                      className={
-                        (variant.stock_quantity || 0) > 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }
+                      className={`font-medium ${
+                        inStock ? "text-green-600" : "text-red-600"
+                      }`}
                     >
-                      {(variant.stock_quantity || 0) > 0
+                      {inStock
                         ? `${variant.stock_quantity} in stock`
                         : "Out of stock"}
                     </span>
                   </div>
                 </div>
               </div>
+
+              {!inStock && (
+                <div className="mt-2 text-xs text-gray-500 italic">
+                  This variant is currently unavailable
+                </div>
+              )}
             </div>
           );
         })}
       </div>
+
+      {variants.length > 2 && (
+        <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg">
+          💡 <strong>Tip:</strong> Different sizes may have different prices and
+          availability. Select your preferred size to see the exact price and
+          stock status.
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Product Features Component
+const ProductFeatures = ({ product }) => {
+  const features = [];
+
+  // Add features based on product properties
+  if (product.is_customizable) {
+    features.push({
+      icon: <Palette className="h-4 w-4" />,
+      title: "Fully Customizable",
+      description: "Personalize with your text, colors, and designs",
+      color: "text-purple-600",
+      bgColor: "bg-purple-100",
+    });
+  }
+
+  if (product.foil_available) {
+    features.push({
+      icon: <Sparkles className="h-4 w-4" />,
+      title: "Foil Options Available",
+      description: "Premium foil finishing for elegant look",
+      color: "text-yellow-600",
+      bgColor: "bg-yellow-100",
+    });
+  }
+
+  if (product.bulk_order_allowed) {
+    features.push({
+      icon: <Package2 className="h-4 w-4" />,
+      title: "Bulk Orders Welcome",
+      description: "Special pricing for large quantities",
+      color: "text-blue-600",
+      bgColor: "bg-blue-100",
+    });
+  }
+
+  if (product.cod_allowed) {
+    features.push({
+      icon: <Shield className="h-4 w-4" />,
+      title: "Cash on Delivery",
+      description: "Pay when you receive your order",
+      color: "text-green-600",
+      bgColor: "bg-green-100",
+    });
+  }
+
+  if (product.featured) {
+    features.push({
+      icon: <Award className="h-4 w-4" />,
+      title: "Featured Product",
+      description: "One of our most popular items",
+      color: "text-orange-600",
+      bgColor: "bg-orange-100",
+    });
+  }
+
+  // Always add these standard features
+  features.push(
+    {
+      icon: <Shield className="h-4 w-4" />,
+      title: "Quality Guaranteed",
+      description: "Premium materials and craftsmanship",
+      color: "text-indigo-600",
+      bgColor: "bg-indigo-100",
+    },
+    {
+      icon: <Zap className="h-4 w-4" />,
+      title: "Fast Processing",
+      description: "Quick turnaround on all orders",
+      color: "text-pink-600",
+      bgColor: "bg-pink-100",
+    }
+  );
+
+  if (features.length === 0) return null;
+
+  return (
+    <div className="space-y-4 p-6 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border border-gray-200">
+      <div className="flex items-center space-x-2">
+        <Star className="h-5 w-5 text-gray-700" />
+        <h3 className="font-semibold text-gray-900 text-lg">
+          Product Features
+        </h3>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {features.map((feature, index) => (
+          <div
+            key={index}
+            className="flex items-start space-x-3 p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200"
+          >
+            <div className={`${feature.bgColor} p-2 rounded-lg flex-shrink-0`}>
+              <div className={feature.color}>{feature.icon}</div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-medium text-gray-900 text-sm">
+                {feature.title}
+              </h4>
+              <p className="text-gray-600 text-xs mt-1 leading-relaxed">
+                {feature.description}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Additional Product Specs */}
+      {(product.material_type || product.base_type || product.thickness) && (
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <h4 className="font-medium text-gray-900 text-sm mb-3 flex items-center">
+            <Settings className="h-4 w-4 mr-2" />
+            Technical Specifications
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {product.material_type && (
+              <Badge variant="secondary" className="text-xs">
+                Material: {product.material_type}
+              </Badge>
+            )}
+            {product.base_type && (
+              <Badge variant="secondary" className="text-xs">
+                Base: {product.base_type}
+              </Badge>
+            )}
+            {product.thickness && (
+              <Badge variant="secondary" className="text-xs">
+                Thickness: {product.thickness}
+              </Badge>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Order Limits */}
+      {(product.min_order_qty > 1 || product.max_order_qty) && (
+        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center text-sm text-blue-800">
+            <CheckCircle className="h-4 w-4 mr-2" />
+            <span className="font-medium">Order Information:</span>
+          </div>
+          <div className="text-xs text-blue-700 mt-1 space-y-1">
+            {product.min_order_qty > 1 && (
+              <div>• Minimum order quantity: {product.min_order_qty} units</div>
+            )}
+            {product.max_order_qty && (
+              <div>• Maximum order quantity: {product.max_order_qty} units</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 // Delivery Information Component
-const DeliveryInfo = ({ estimatedDays = 7, codAllowed, bulkOrderAllowed }) => {
-  const currentDate = new Date();
-  const deliveryDate = new Date(
-    currentDate.getTime() + estimatedDays * 24 * 60 * 60 * 1000
-  );
+const DeliveryInfo = ({ product, estimatedDays = 7 }) => {
+  const paymentMethods = [];
+
+  if (product.cod_allowed) {
+    paymentMethods.push({
+      icon: <Package className="h-3 w-3" />,
+      name: "Cash on Delivery",
+      description: "Pay when you receive",
+    });
+  }
+
+  paymentMethods.push({
+    icon: <CreditCard className="h-3 w-3" />,
+    name: "Online Payment",
+    description: "UPI, Cards, Net Banking",
+  });
 
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 space-y-4">
+    <div className="space-y-6 p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200">
       <div className="flex items-center space-x-2">
-        <Truck className="h-5 w-5 text-blue-600" />
-        <h3 className="font-semibold text-blue-900">Delivery Information</h3>
+        <Truck className="h-5 w-5 text-green-600" />
+        <h3 className="font-semibold text-green-900 text-lg">
+          Delivery Information
+        </h3>
       </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Clock className="h-4 w-4 text-blue-600" />
-            <span className="text-sm font-medium text-blue-900">
-              Estimated Delivery
-            </span>
-          </div>
-          <div className="text-right">
-            <div className="font-semibold text-blue-900">
-              {estimatedDays} days
-            </div>
-            <div className="text-xs text-blue-700">
-              by{" "}
-              {deliveryDate.toLocaleDateString("en-IN", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-blue-700">Cash on Delivery</span>
-          <span
-            className={`font-medium ${
-              codAllowed ? "text-green-600" : "text-red-600"
-            }`}
-          >
-            {codAllowed ? "Available" : "Not Available"}
+      {/* Delivery Time */}
+      <div className="bg-white p-4 rounded-xl border border-green-200 shadow-sm">
+        <div className="flex items-center space-x-2 mb-2">
+          <Clock className="h-4 w-4 text-green-600" />
+          <span className="font-medium text-green-900 text-sm">
+            Delivery Time
           </span>
         </div>
+        <p className="text-gray-700 text-sm">
+          {estimatedDays}-{estimatedDays + 3} business days
+        </p>
+        <p className="text-xs text-gray-600 mt-1">
+          Delivery time may vary based on location
+        </p>
+      </div>
 
-        {bulkOrderAllowed && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-blue-700">Bulk Orders</span>
-            <span className="font-medium text-green-600">Available</span>
+      {/* Processing Time */}
+      <div className="bg-white p-4 rounded-xl border border-green-200 shadow-sm">
+        <div className="flex items-center space-x-2 mb-2">
+          <Calendar className="h-4 w-4 text-green-600" />
+          <span className="font-medium text-green-900 text-sm">
+            Processing Time
+          </span>
+        </div>
+        <p className="text-gray-700 text-sm">
+          {product.is_customizable ? "2-3 business days" : "1-2 business days"}
+        </p>
+        <p className="text-xs text-gray-600 mt-1">
+          {product.is_customizable
+            ? "For customized products"
+            : "Standard processing"}
+        </p>
+      </div>
+
+      {/* Coverage Area */}
+      <div className="bg-white p-4 rounded-xl border border-green-200 shadow-sm">
+        <div className="flex items-center space-x-2 mb-2">
+          <MapPin className="h-4 w-4 text-green-600" />
+          <span className="font-medium text-green-900 text-sm">
+            Service Area
+          </span>
+        </div>
+        <p className="text-gray-700 text-sm">India-wide delivery available</p>
+        <p className="text-xs text-gray-600 mt-1">
+          Remote areas may take additional time
+        </p>
+      </div>
+
+      {/* Payment Methods */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-green-900 text-sm flex items-center">
+          <CreditCard className="h-4 w-4 mr-2" />
+          Payment Options
+        </h4>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {paymentMethods.map((method, index) => (
+            <div
+              key={index}
+              className="flex items-center space-x-2 p-3 bg-white rounded-lg border border-green-200"
+            >
+              <div className="text-green-600">{method.icon}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm text-gray-900">
+                  {method.name}
+                </div>
+                <div className="text-xs text-gray-600">
+                  {method.description}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Important Notes */}
+      <div className="space-y-2">
+        {product.is_customizable && (
+          <div className="flex items-start space-x-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm">
+              <span className="font-medium text-blue-800">Custom Orders:</span>
+              <span className="text-blue-700 ml-1">
+                Customized products take additional processing time and cannot
+                be cancelled once production starts.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {product.bulk_order_allowed && (
+          <div className="flex items-start space-x-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm">
+              <span className="font-medium text-blue-800">Bulk Orders:</span>
+              <span className="text-blue-700 ml-1">
+                Contact us for bulk pricing and delivery information.
+              </span>
+            </div>
           </div>
         )}
       </div>
     </div>
   );
 };
-
 const ProductDetail = () => {
   const { slug, productId } = useParams();
   const navigate = useNavigate();
@@ -418,12 +689,16 @@ const ProductDetail = () => {
     useFavourites();
   const { toast } = useToast();
 
+  // State management
   const [product, setProduct] = useState(null);
   const [productImages, setProductImages] = useState([]);
   const [productVariants, setProductVariants] = useState([]);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [quantity, setQuantity] = useState(1);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [isBuying, setIsBuying] = useState(false);
 
   const [customization, setCustomization] = useState({
     text: "",
@@ -432,13 +707,15 @@ const ProductDetail = () => {
     uploadedImage: null,
   });
 
+  // Fetch product data
   useEffect(() => {
-    const fetchProduct = async () => {
+    const fetchProductData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const { data, error: fetchError } = await supabase
+        // Fetch main product
+        const { data: productData, error: productError } = await supabase
           .from("products")
           .select(
             `
@@ -453,17 +730,15 @@ const ProductDetail = () => {
           .eq("id", productId)
           .single();
 
-        if (fetchError) {
-          console.error("Fetch error:", fetchError);
-          throw fetchError;
-        }
-        if (!data) throw new Error("Product not found");
+        if (productError) throw productError;
+        if (!productData) throw new Error("Product not found");
 
-        if (data.categories?.slug !== slug) {
+        // Verify category slug matches
+        if (productData.categories?.slug !== slug) {
           throw new Error("Product does not belong to this category");
         }
 
-        setProduct(data);
+        setProduct(productData);
 
         // Fetch product variants
         const { data: variantData, error: variantError } = await supabase
@@ -473,48 +748,50 @@ const ProductDetail = () => {
           .eq("is_active", true)
           .order("price", { ascending: true });
 
-        if (!variantError && variantData && variantData.length > 0) {
+        if (!variantError && variantData) {
           setProductVariants(variantData);
-          setSelectedVariant(variantData[0]);
+          if (variantData.length > 0) {
+            setSelectedVariant(variantData[0]);
+          }
         }
 
-        // Process images
-        const allImages = [];
-        if (data.image_url) {
-          allImages.push({
+        // Process product images
+        const images = [];
+        if (productData.image_url) {
+          images.push({
             id: "main",
-            image_url: data.image_url,
-            alt_text: data.title,
+            image_url: productData.image_url,
+            alt_text: productData.title,
             display_order: 0,
           });
         }
 
-        if (data.additional_images && Array.isArray(data.additional_images)) {
-          data.additional_images.forEach((url, idx) => {
-            allImages.push({
+        // Add additional images if they exist
+        if (
+          productData.additional_images &&
+          Array.isArray(productData.additional_images)
+        ) {
+          productData.additional_images.forEach((url, idx) => {
+            images.push({
               id: `additional-${idx}`,
               image_url: url,
-              alt_text: `${data.title} ${idx + 2}`,
+              alt_text: `${productData.title} ${idx + 2}`,
               display_order: idx + 1,
             });
           });
         }
 
-        setProductImages(allImages);
+        setProductImages(images);
 
         // Set customization defaults
-        const fields = data.customizable_fields || {};
-        setCustomization((prev) => ({
-          ...prev,
-          color:
-            fields.colors && Array.isArray(fields.colors)
-              ? fields.colors[0] || ""
-              : "",
-          size:
-            fields.sizes && Array.isArray(fields.sizes)
-              ? fields.sizes[0] || ""
-              : "",
-        }));
+        if (productData.customizable_fields) {
+          const fields = productData.customizable_fields;
+          setCustomization((prev) => ({
+            ...prev,
+            color: fields.colors?.[0] || "",
+            size: fields.sizes?.[0] || "",
+          }));
+        }
       } catch (err) {
         console.error("Error fetching product:", err);
         setError(err.message || "Failed to load product");
@@ -523,15 +800,15 @@ const ProductDetail = () => {
       }
     };
 
-    if (!productId || !slug) {
+    if (productId && slug) {
+      fetchProductData();
+    } else {
       setError("Missing route parameters");
       setLoading(false);
-      return;
     }
-
-    fetchProduct();
   }, [productId, slug]);
 
+  // Helper functions
   const getCurrentPrice = () => {
     return selectedVariant ? selectedVariant.price : product?.price || 0;
   };
@@ -543,69 +820,64 @@ const ProductDetail = () => {
     return product?.in_stock || false;
   };
 
-  const getCustomizationOptions = (type) => {
-    if (!product?.customizable_fields) return [];
-    const fields = product.customizable_fields;
-    const options = type === "color" ? fields.colors : fields.sizes;
-    return Array.isArray(options) ? options : [];
+  const getStockQuantity = () => {
+    if (selectedVariant) {
+      return selectedVariant.stock_quantity || 0;
+    }
+    return product?.quantity || 0;
   };
 
-  const handleAddToCart = () => {
-    if (!product) return;
+  const minQuantity = product?.min_order_qty || 1;
+  const maxQuantity = product?.max_order_qty || 50;
 
-    const currentPrice = getCurrentPrice();
-    const cartItem = {
-      id: selectedVariant ? selectedVariant.id : product.id,
-      productId: product.id,
-      variantId: selectedVariant?.id,
-      name: product.title,
-      price: currentPrice / 100,
-      image: product.image_url,
-      variant: selectedVariant
-        ? {
-            size: selectedVariant.size_label,
-            dimensions: formatDimensions(selectedVariant.dimensions),
-          }
-        : null,
-      customization: {
-        text: customization.text,
-        color: customization.color,
-        size: customization.size,
-        uploadedImage: customization.uploadedImage?.name,
-      },
-    };
-
-    addItem(cartItem);
-
-    toast({
-      title: "Added to Cart!",
-      description: `${product.title} has been added to your cart.`,
-    });
-
-    return cartItem;
+  // Action handlers
+  const handleVariantSelect = (variant) => {
+    setSelectedVariant(variant);
   };
 
-  const handleBuyNow = async () => {
+  const handleQuantityChange = (change) => {
+    const newQuantity = quantity + change;
+    if (newQuantity >= minQuantity && newQuantity <= maxQuantity) {
+      setQuantity(newQuantity);
+    }
+  };
+
+  const handleCustomizationChange = (field, value) => {
+    setCustomization((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCustomization((prev) => ({
+        ...prev,
+        uploadedImage: file,
+      }));
+    }
+  };
+
+  const handleAddToCart = async () => {
     if (!product) return;
 
+    setIsAddingToCart(true);
     try {
-      // Clear existing cart first
-      await clearCart();
-
-      // Add current product to cart
-      const currentPrice = getCurrentPrice();
       const cartItem = {
-        id: selectedVariant ? selectedVariant.id : product.id,
+        id: selectedVariant
+          ? `${product.id}-${selectedVariant.id}`
+          : product.id,
         productId: product.id,
         variantId: selectedVariant?.id,
         name: product.title,
-        price: currentPrice / 100,
+        price: getCurrentPrice() / 100,
         image: product.image_url,
-        quantity: 1, // Default quantity for buy now
+        quantity: quantity,
         variant: selectedVariant
           ? {
-              size: selectedVariant.size_label,
-              dimensions: formatDimensions(selectedVariant.dimensions),
+              size: selectedVariant.size_code,
+              weight: selectedVariant.weight_grams,
             }
           : null,
         customization: {
@@ -616,19 +888,56 @@ const ProductDetail = () => {
         },
       };
 
-      // Add the item to cart
       addItem(cartItem);
+      toast({
+        title: "Added to Cart!",
+        description: `${product.title} (${quantity} ${
+          quantity > 1 ? "items" : "item"
+        }) has been added to your cart.`,
+      });
+    } finally {
+      setIsAddingToCart(false);
+    }
+  };
 
-      // Show toast notification
+  const handleBuyNow = async () => {
+    if (!product) return;
+
+    setIsBuying(true);
+    try {
+      await clearCart();
+
+      const cartItem = {
+        id: selectedVariant
+          ? `${product.id}-${selectedVariant.id}`
+          : product.id,
+        productId: product.id,
+        variantId: selectedVariant?.id,
+        name: product.title,
+        price: getCurrentPrice() / 100,
+        image: product.image_url,
+        quantity: quantity,
+        variant: selectedVariant
+          ? {
+              size: selectedVariant.size_code,
+              weight: selectedVariant.weight_grams,
+            }
+          : null,
+        customization: {
+          text: customization.text,
+          color: customization.color,
+          size: customization.size,
+          uploadedImage: customization.uploadedImage?.name,
+        },
+      };
+
+      addItem(cartItem);
       toast({
         title: "Proceeding to Checkout",
-        description: `${product.title} added to cart. Redirecting to checkout...`,
+        description: "Redirecting to checkout...",
       });
 
-      // Small delay to ensure cart is updated, then navigate to checkout
-      setTimeout(() => {
-        navigate("/checkout");
-      }, 500);
+      setTimeout(() => navigate("/checkout"), 500);
     } catch (error) {
       console.error("Buy Now error:", error);
       toast({
@@ -636,15 +945,19 @@ const ProductDetail = () => {
         description: "Failed to proceed to checkout. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsBuying(false);
     }
   };
 
   const handleToggleFavourite = () => {
     if (!product) return;
+
     const action = isFavourite(product.id)
       ? removeFromFavourites
       : addToFavourites;
     action(product);
+
     toast({
       title: isFavourite(product.id)
         ? "Removed from Favourites"
@@ -655,33 +968,36 @@ const ProductDetail = () => {
     });
   };
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (file) setCustomization({ ...customization, uploadedImage: file });
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: product.title,
+        text: product.description,
+        url: window.location.href,
+      });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast({
+        title: "Link Copied!",
+        description: "Product link has been copied to clipboard.",
+      });
+    }
   };
 
   const formatPrice = (priceInPaise) =>
     ((priceInPaise || 0) / 100).toLocaleString("en-IN");
 
-  const parseFeatures = (features) => {
-    if (!features) return [];
-    if (Array.isArray(features)) return features;
-    try {
-      const parsed = JSON.parse(features);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return features
-        .toString()
-        .split(",")
-        .map((f) => f.trim())
-        .filter(Boolean);
-    }
+  const getCustomizationOptions = (type) => {
+    if (!product?.customizable_fields) return [];
+    const fields = product.customizable_fields;
+    const options = type === "color" ? fields.colors : fields.sizes;
+    return Array.isArray(options) ? options : [];
   };
 
   const colorOptions = getCustomizationOptions("color");
   const sizeOptions = getCustomizationOptions("size");
-  const features = parseFeatures(product?.features);
 
+  // Loading state
   if (loading) {
     return (
       <Layout>
@@ -716,6 +1032,7 @@ const ProductDetail = () => {
     );
   }
 
+  // Error state
   if (error || !product) {
     return (
       <Layout>
@@ -751,6 +1068,7 @@ const ProductDetail = () => {
     <Layout>
       <div className="py-8 bg-gradient-to-br from-gray-50 to-white min-h-screen">
         <div className="container mx-auto px-4">
+          {/* Back Button */}
           <Button
             variant="ghost"
             onClick={() => navigate(-1)}
@@ -761,14 +1079,16 @@ const ProductDetail = () => {
           </Button>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            {/* Product Images */}
             <div className="lg:sticky lg:top-8 lg:self-start">
               <ImageGallery product={product} productImages={productImages} />
             </div>
 
+            {/* Product Details */}
             <div className="space-y-6">
               {/* Header Section */}
               <div className="space-y-4">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center flex-wrap gap-2">
                   <Badge
                     variant="outline"
                     className="text-primary border-primary/30 bg-primary/5"
@@ -781,42 +1101,60 @@ const ProductDetail = () => {
                       #{product.catalog_number}
                     </Badge>
                   )}
+                  {product.featured && (
+                    <Badge className="bg-gradient-to-r from-yellow-400 to-orange-400 text-white">
+                      Featured
+                    </Badge>
+                  )}
                 </div>
 
                 <h1 className="text-4xl font-bold text-gray-900 leading-tight">
                   {product.title}
                 </h1>
 
-                {/* Price */}
+                {/* Price Section */}
                 <div className="space-y-2">
-                  <div className="text-4xl font-bold text-primary">
-                    ₹{formatPrice(getCurrentPrice())}
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-4xl font-bold text-primary">
+                      ₹{formatPrice(getCurrentPrice())}
+                    </span>
+                    {selectedVariant &&
+                      selectedVariant.price !== product.price && (
+                        <span className="text-lg text-gray-500 line-through">
+                          ₹{formatPrice(product.price)}
+                        </span>
+                      )}
                   </div>
-                  {selectedVariant &&
-                    selectedVariant.price !== product.price && (
-                      <div className="text-lg text-gray-500 line-through">
-                        ₹{formatPrice(product.price)}
-                      </div>
-                    )}
+
+                  {selectedVariant && (
+                    <p className="text-sm text-gray-600">
+                      Price for{" "}
+                      {selectedVariant.size_code || "selected variant"}
+                    </p>
+                  )}
                 </div>
 
-                {/* Stock status */}
+                {/* Stock Status */}
                 <div className="flex items-center space-x-4">
                   <Badge
                     variant={getCurrentStock() ? "default" : "destructive"}
-                    className={
-                      getCurrentStock() ? "bg-green-100 text-green-800" : ""
-                    }
+                    className={`${
+                      getCurrentStock()
+                        ? "bg-green-100 text-green-800 border-green-200"
+                        : "bg-red-100 text-red-800 border-red-200"
+                    }`}
                   >
-                    <CheckCircle
-                      className={`h-3 w-3 mr-1 ${
-                        getCurrentStock() ? "text-green-600" : "text-red-600"
-                      }`}
-                    />
-                    {getCurrentStock() ? "In Stock" : "Out of Stock"}
+                    {getCurrentStock() ? (
+                      <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-3 w-3 mr-1 text-red-600" />
+                    )}
+                    {getCurrentStock()
+                      ? `In Stock (${getStockQuantity()})`
+                      : "Out of Stock"}
                   </Badge>
 
-                  {product.min_order_qty && (
+                  {product.min_order_qty && product.min_order_qty > 1 && (
                     <span className="text-sm text-gray-600">
                       Min. Order: {product.min_order_qty} units
                     </span>
@@ -826,8 +1164,8 @@ const ProductDetail = () => {
 
               {/* Description */}
               {product.description && (
-                <div className="prose prose-gray max-w-none bg-gray-50 p-6 rounded-2xl">
-                  <p className="text-gray-700 leading-relaxed text-lg">
+                <div className="prose prose-gray max-w-none bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                  <p className="text-gray-700 leading-relaxed text-lg m-0">
                     {product.description}
                   </p>
                 </div>
@@ -836,7 +1174,7 @@ const ProductDetail = () => {
               {/* Product Specifications */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {product.material_type && (
-                  <div className="bg-white p-4 rounded-xl border border-gray-200">
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                     <div className="flex items-center space-x-2 mb-2">
                       <Palette className="h-4 w-4 text-gray-600" />
                       <span className="font-medium text-gray-900">
@@ -847,18 +1185,38 @@ const ProductDetail = () => {
                   </div>
                 )}
 
-                {product.weight_grams && (
-                  <div className="bg-white p-4 rounded-xl border border-gray-200">
+                {(selectedVariant?.weight_grams || product.weight_grams) && (
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                     <div className="flex items-center space-x-2 mb-2">
                       <Weight className="h-4 w-4 text-gray-600" />
                       <span className="font-medium text-gray-900">Weight</span>
                     </div>
-                    <p className="text-gray-700">{product.weight_grams}g</p>
+                    <p className="text-gray-700">
+                      {selectedVariant?.weight_grams || product.weight_grams}g
+                    </p>
+                  </div>
+                )}
+
+                {formatDimensions(
+                  selectedVariant?.dimensions || product.dimensions
+                ) && (
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Ruler className="h-4 w-4 text-gray-600" />
+                      <span className="font-medium text-gray-900">
+                        Dimensions
+                      </span>
+                    </div>
+                    <p className="text-gray-700">
+                      {formatDimensions(
+                        selectedVariant?.dimensions || product.dimensions
+                      )}
+                    </p>
                   </div>
                 )}
 
                 {product.thickness && (
-                  <div className="bg-white p-4 rounded-xl border border-gray-200">
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                     <div className="flex items-center space-x-2 mb-2">
                       <Ruler className="h-4 w-4 text-gray-600" />
                       <span className="font-medium text-gray-900">
@@ -869,10 +1227,22 @@ const ProductDetail = () => {
                   </div>
                 )}
 
-                {product.foil_available && (
-                  <div className="bg-white p-4 rounded-xl border border-gray-200">
+                {product.base_type && (
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                     <div className="flex items-center space-x-2 mb-2">
                       <Shield className="h-4 w-4 text-gray-600" />
+                      <span className="font-medium text-gray-900">
+                        Base Type
+                      </span>
+                    </div>
+                    <p className="text-gray-700">{product.base_type}</p>
+                  </div>
+                )}
+
+                {product.foil_available && (
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Sparkles className="h-4 w-4 text-gray-600" />
                       <span className="font-medium text-gray-900">
                         Foil Option
                       </span>
@@ -883,71 +1253,57 @@ const ProductDetail = () => {
               </div>
 
               {/* Product Variants */}
-              <ProductVariants
-                variants={productVariants}
-                selectedVariant={selectedVariant}
-                onVariantSelect={setSelectedVariant}
-              />
-
-              {/* Delivery Information */}
-              <DeliveryInfo
-                estimatedDays={7}
-                codAllowed={product.cod_allowed}
-                bulkOrderAllowed={product.bulk_order_allowed}
-              />
-
-              {/* Features */}
-              {features.length > 0 && (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
-                  <h3 className="font-semibold text-blue-900 mb-4 text-lg">
-                    Key Features
-                  </h3>
-                  <ul className="space-y-3">
-                    {features.map((feature, index) => (
-                      <li
-                        key={index}
-                        className="flex items-start text-blue-800"
-                      >
-                        <div className="w-2 h-2 bg-blue-600 rounded-full mr-3 mt-2 flex-shrink-0" />
-                        <span className="leading-relaxed">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              {productVariants.length > 0 && (
+                <ProductVariants
+                  variants={productVariants}
+                  selectedVariant={selectedVariant}
+                  onVariantSelect={handleVariantSelect}
+                />
               )}
 
+              {/* Delivery Information */}
+              <DeliveryInfo product={product} estimatedDays={7} />
+
+              {/* Product Features */}
+              <ProductFeatures product={product} />
+
               {/* Customization Options */}
-              {(colorOptions.length > 0 ||
-                sizeOptions.length > 0 ||
-                product.is_customizable) && (
+              {(product.is_customizable ||
+                colorOptions.length > 0 ||
+                sizeOptions.length > 0) && (
                 <div className="space-y-6 p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border border-purple-200">
                   <h3 className="font-semibold text-purple-900 text-lg flex items-center">
                     <Palette className="h-5 w-5 mr-2" />
                     Customize Your Product
                   </h3>
 
-                  <div>
-                    <Label
-                      htmlFor="customText"
-                      className="text-sm font-medium text-purple-900"
-                    >
-                      Custom Text (Optional)
-                    </Label>
-                    <Textarea
-                      id="customText"
-                      placeholder="Enter text for engraving or personalization..."
-                      value={customization.text}
-                      onChange={(e) =>
-                        setCustomization({
-                          ...customization,
-                          text: e.target.value,
-                        })
-                      }
-                      className="mt-2 resize-none border-purple-200 focus:border-purple-400"
-                      rows={3}
-                    />
-                  </div>
+                  {/* Custom Text */}
+                  {product.is_customizable && (
+                    <div>
+                      <Label
+                        htmlFor="customText"
+                        className="text-sm font-medium text-purple-900"
+                      >
+                        Custom Text (Optional)
+                      </Label>
+                      <Textarea
+                        id="customText"
+                        placeholder="Enter text for engraving or personalization..."
+                        value={customization.text}
+                        onChange={(e) =>
+                          handleCustomizationChange("text", e.target.value)
+                        }
+                        className="mt-2 resize-none border-purple-200 focus:border-purple-400"
+                        rows={3}
+                      />
+                      <p className="text-xs text-purple-600 mt-1">
+                        Add custom text for engraving, embossing, or printing on
+                        your product
+                      </p>
+                    </div>
+                  )}
 
+                  {/* Color Options */}
                   {colorOptions.length > 0 && (
                     <div>
                       <Label className="text-sm font-medium text-purple-900">
@@ -958,7 +1314,7 @@ const ProductDetail = () => {
                           <button
                             key={color}
                             onClick={() =>
-                              setCustomization({ ...customization, color })
+                              handleCustomizationChange("color", color)
                             }
                             className={`px-4 py-2 rounded-lg border-2 font-medium transition-all duration-200 ${
                               customization.color === color
@@ -973,17 +1329,18 @@ const ProductDetail = () => {
                     </div>
                   )}
 
+                  {/* Size Options */}
                   {sizeOptions.length > 0 && (
                     <div>
                       <Label className="text-sm font-medium text-purple-900">
-                        Size Options
+                        Customization Size Options
                       </Label>
                       <div className="flex gap-3 mt-3 flex-wrap">
                         {sizeOptions.map((size) => (
                           <button
                             key={size}
                             onClick={() =>
-                              setCustomization({ ...customization, size })
+                              handleCustomizationChange("size", size)
                             }
                             className={`px-4 py-2 rounded-lg border-2 font-medium transition-all duration-200 ${
                               customization.size === size
@@ -995,128 +1352,240 @@ const ProductDetail = () => {
                           </button>
                         ))}
                       </div>
+                      <p className="text-xs text-purple-600 mt-2">
+                        Note: This is different from product size variants and
+                        relates to customization options
+                      </p>
                     </div>
                   )}
 
-                  <div>
-                    <Label
-                      htmlFor="imageUpload"
-                      className="text-sm font-medium text-purple-900"
-                    >
-                      Upload Custom Image (Optional)
-                    </Label>
-                    <div className="mt-3">
-                      <input
-                        id="imageUpload"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          document.getElementById("imageUpload")?.click()
-                        }
-                        className="w-full h-12 border-2 border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 transition-all duration-200"
+                  {/* Image Upload */}
+                  {product.is_customizable && (
+                    <div>
+                      <Label
+                        htmlFor="imageUpload"
+                        className="text-sm font-medium text-purple-900"
                       >
-                        <Upload className="h-4 w-4 mr-2" />
-                        {customization.uploadedImage
-                          ? customization.uploadedImage.name
-                          : "Choose Image File"}
-                      </Button>
-                      {customization.uploadedImage && (
-                        <p className="text-xs text-purple-600 mt-2">
-                          Selected: {customization.uploadedImage.name}
-                        </p>
-                      )}
+                        Upload Custom Image (Optional)
+                      </Label>
+                      <div className="mt-3">
+                        <input
+                          id="imageUpload"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            document.getElementById("imageUpload")?.click()
+                          }
+                          className="w-full h-12 border-2 border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 transition-all duration-200"
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          {customization.uploadedImage
+                            ? customization.uploadedImage.name
+                            : "Choose Image File"}
+                        </Button>
+                        {customization.uploadedImage && (
+                          <p className="text-xs text-purple-600 mt-2">
+                            Selected: {customization.uploadedImage.name}
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-xs text-purple-600 mt-1">
+                        Upload an image for printing, engraving, or custom
+                        design work
+                      </p>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 
-              {/* Enhanced Action Buttons Section */}
-              <div className="space-y-4 pt-6 border-t border-gray-200">
-                {/* Buy Now Button - Primary CTA */}
-                <Button
-                  onClick={handleBuyNow}
-                  className="w-full h-16 text-xl font-bold bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]"
-                  disabled={!getCurrentStock()}
-                  size="lg"
-                >
-                  <Zap className="h-6 w-6 mr-3" />
-                  {getCurrentStock()
-                    ? "Buy Now - Quick Checkout"
-                    : "Out of Stock"}
-                </Button>
+              {/* Quantity Selector & Actions */}
+              <div className="space-y-6">
+                {/* Quantity Selector */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-gray-900">
+                      Quantity
+                    </label>
+                    {(minQuantity > 1 || maxQuantity < 50) && (
+                      <div className="text-xs text-gray-600">
+                        Min: {minQuantity}, Max: {maxQuantity}
+                      </div>
+                    )}
+                  </div>
 
-                {/* Secondary Actions Row */}
-                <div className="flex gap-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center border border-gray-300 rounded-lg">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleQuantityChange(-1)}
+                        disabled={quantity <= minQuantity}
+                        className="h-10 w-10 p-0 hover:bg-gray-100"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+
+                      <div className="flex items-center justify-center w-16 h-10 text-center font-medium border-x border-gray-300">
+                        {quantity}
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleQuantityChange(1)}
+                        disabled={quantity >= maxQuantity}
+                        className="h-10 w-10 p-0 hover:bg-gray-100"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {quantity > 1 && (
+                      <div className="text-sm text-gray-600">
+                        Total: ₹
+                        {(
+                          ((getCurrentPrice() || 0) * quantity) /
+                          100
+                        ).toLocaleString("en-IN")}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stock Warning */}
+                {!getCurrentStock() && (
+                  <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                    <div className="text-sm text-red-800">
+                      <span className="font-medium">Out of Stock:</span>
+                      <span className="ml-1">
+                        This item is currently unavailable.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Action Buttons */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Button
                     onClick={handleAddToCart}
-                    className="flex-1 h-14 text-lg font-semibold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary shadow-lg hover:shadow-xl transition-all duration-300"
-                    disabled={!getCurrentStock()}
-                    size="lg"
-                    variant="outline"
+                    disabled={!getCurrentStock() || isAddingToCart}
+                    className="h-12 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <ShoppingCart className="h-5 w-5 mr-2" />
-                    Add to Cart
+                    {isAddingToCart ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <ShoppingCart className="h-4 w-4 mr-2" />
+                    )}
+                    {isAddingToCart ? "Adding..." : "Add to Cart"}
                   </Button>
 
+                  <Button
+                    onClick={handleBuyNow}
+                    disabled={!getCurrentStock() || isBuying}
+                    className="h-12 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isBuying ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Zap className="h-4 w-4 mr-2" />
+                    )}
+                    {isBuying ? "Processing..." : "Buy Now"}
+                  </Button>
+                </div>
+
+                {/* Secondary Actions */}
+                <div className="grid grid-cols-3 gap-3">
                   <Button
                     variant="outline"
                     onClick={handleToggleFavourite}
-                    className="h-14 px-6 border-2 hover:scale-105 transition-transform duration-200"
-                    size="lg"
+                    className={`h-12 ${
+                      isFavourite(product.id)
+                        ? "border-red-300 text-red-600 bg-red-50 hover:bg-red-100"
+                        : "hover:border-red-300 hover:text-red-600 hover:bg-red-50"
+                    }`}
                   >
                     <Heart
-                      className={`h-5 w-5 ${
-                        isFavourite(product.id)
-                          ? "text-red-500 fill-current"
-                          : ""
+                      className={`h-4 w-4 mr-2 ${
+                        isFavourite(product.id) ? "fill-current" : ""
                       }`}
                     />
+                    {isFavourite(product.id) ? "Saved" : "Save"}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleShare}
+                    className="h-12 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50"
+                  >
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="h-12 hover:border-green-300 hover:text-green-600 hover:bg-green-50"
+                  >
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Ask
                   </Button>
                 </div>
 
-                {/* Purchase Information */}
-                {getCurrentStock() && (
-                  <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                    <div className="flex items-center text-sm text-green-800">
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      <span className="font-medium">
-                        Ready to ship • Buy Now for instant checkout
-                      </span>
-                    </div>
-                    <div className="mt-2 text-xs text-green-700">
-                      • Skip cart and go directly to payment
-                      <br />• Same secure checkout process
-                      {product.cod_allowed && (
-                        <>
-                          <br />• Cash on Delivery available
-                        </>
-                      )}
-                    </div>
+                {/* Contact Information */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200">
+                  <h4 className="font-medium text-blue-900 mb-3 text-sm">
+                    Need Help?
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <a
+                      href="tel:+919876543210"
+                      className="flex items-center space-x-2 text-blue-700 hover:text-blue-800 transition-colors"
+                    >
+                      <Phone className="h-4 w-4" />
+                      <span className="text-sm">Call Us</span>
+                    </a>
+                    <a
+                      href="mailto:support@example.com"
+                      className="flex items-center space-x-2 text-blue-700 hover:text-blue-800 transition-colors"
+                    >
+                      <Mail className="h-4 w-4" />
+                      <span className="text-sm">Email Us</span>
+                    </a>
                   </div>
-                )}
-              </div>
+                  <p className="text-xs text-blue-600 mt-2">
+                    Get personalized assistance for bulk orders, customization,
+                    or any questions.
+                  </p>
+                </div>
 
-              {/* Trust Badges */}
-              <div className="flex items-center justify-center space-x-6 pt-4">
-                <div className="flex items-center text-sm text-gray-600">
-                  <Shield className="h-4 w-4 mr-1" />
-                  Authentic Product
+                {/* Trust Indicators */}
+                <div className="flex items-center justify-center space-x-4 pt-2">
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-green-200 text-green-700 bg-green-50"
+                  >
+                    ✓ Authentic Products
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-blue-200 text-blue-700 bg-blue-50"
+                  >
+                    ✓ Secure Payment
+                  </Badge>
+                  {product.cod_allowed && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-purple-200 text-purple-700 bg-purple-50"
+                    >
+                      ✓ COD Available
+                    </Badge>
+                  )}
                 </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Package className="h-4 w-4 mr-1" />
-                  Secure Packaging
-                </div>
-                {product.cod_allowed && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Truck className="h-4 w-4 mr-1" />
-                    COD Available
-                  </div>
-                )}
               </div>
             </div>
           </div>
