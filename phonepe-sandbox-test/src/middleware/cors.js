@@ -172,7 +172,7 @@ class CorsMiddleware {
       `http://localhost:3000`,
       `http://localhost:5173`,
       `http://localhost:3001`,
-      `https://shrifal-handicrafts.onrender.com`,
+      `https://shrifal-handicrafts.netlify.app/`,
     ];
 
     if (process.env.ALLOWED_ORIGINS) {
