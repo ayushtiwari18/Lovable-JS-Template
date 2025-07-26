@@ -175,7 +175,7 @@ const CategoryCard = ({ category, viewMode = "grid" }) => {
                 <div className="flex-shrink-0">
                   {" "}
                   {/* Prevent button from shrinking */}
-                  <Link to={`/category/${category.slug}`}>
+                  <Link to={`/category/${category.slug}/products`}>
                     <Button
                       size="lg"
                       className="w-full sm:w-auto shadow-lg whitespace-nowrap"
@@ -216,7 +216,7 @@ const CategoryCard = ({ category, viewMode = "grid" }) => {
 
         {/* Fixed hover button positioning */}
         <div className="absolute bottom-4 left-4 right-4 transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
-          <Link to={`/category/${category.slug}`} className="block">
+          <Link to={`/category/${category.slug}/products`} className="block">
             <Button
               size="sm"
               className="w-full bg-white/90 backdrop-blur-sm text-gray-900 hover:bg-white shadow-lg border-0 truncate"
@@ -265,7 +265,7 @@ const CategoryCard = ({ category, viewMode = "grid" }) => {
               {formatPrice(category.price)}
             </div>
 
-            <Link to={`/category/${category.slug}`} className="w-full">
+            <Link to={`/category/${category.slug}/products`} className="w-full">
               <Button
                 size="lg"
                 className="w-full px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5"
