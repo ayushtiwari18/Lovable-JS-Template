@@ -12,7 +12,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "https://shrifal-handicrafts.onrender.com"||"http://localhost:3000" , // adjust to your backend port
+        target: "https://shrifal-handicrafts.onrender.com", // adjust to your backend port
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, "/api"),
