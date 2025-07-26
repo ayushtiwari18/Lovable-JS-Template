@@ -7,6 +7,7 @@ const path = require("path");
 
 const config = require("./config/environment");
 const errorHandler = require("./middleware/errorHandler");
+const corsMiddleware = require("./middleware/corsMiddleware"); // ✅ Import your CORS middleware
 
 // Route imports
 const paymentRoutes = require("./routes/payment");
@@ -22,6 +23,8 @@ const app = express();
 // Trust proxy - CRITICAL for Render/Netlify deployments
 app.set('trust proxy', true);
 // app.js
+// ✅ FIXED: Apply CORS FIRST, before HTTPS redirect
+app.use(corsMiddleware.basicCors());
 
 app.use(httpsRedirect);
 
@@ -39,18 +42,7 @@ app.use(
   })
 );
 
-// CORS configuration
-app.use(
-  cors({
-    origin:
-      config.NODE_ENV === "production"
-        ? [config.FRONTEND_URL, "https://shrifalhandicrafts.netlify.app"]
-        : ["http://localhost:3000", "http://localhost:5173"],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  })
-);
+
 
 // Rate limiting
 const limiter = rateLimit({
