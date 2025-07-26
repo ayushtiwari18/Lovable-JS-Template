@@ -2,10 +2,7 @@ const express = require("express");
 const PaymentController = require("../controllers/paymentController"); // Change to uppercase
 const { body, validationResult } = require("express-validator");
 // In src/routes/payment.js
-const { optionalAuth } = require('../middleware/auth');
-
-
-
+const { optionalAuth } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -34,7 +31,12 @@ const validatePaymentRequest = [
 
 // Payment initiation
 // Add auth middleware to payment routes
-router.post("/pay", optionalAuth, validatePaymentRequest, PaymentController.initiatePayment);
+router.post(
+  "/pay",
+  optionalAuth,
+  validatePaymentRequest,
+  PaymentController.initiatePayment
+);
 
 // PhonePe redirect handler
 router.post("/redirect", PaymentController.handleRedirect);

@@ -4,7 +4,11 @@ const httpsRedirect = (req, res, next) => {
   if (process.env.NODE_ENV !== "production") {
     return next();
   }
-
+  
+  // Skip HTTPS redirect for API routes - they should work over HTTPS anyway
+  if (req.path.startsWith("/api/")) {
+    return next();
+  }
   // Check if request is secure
   const isSecure =
     req.secure ||
