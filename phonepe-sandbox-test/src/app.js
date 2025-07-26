@@ -7,7 +7,7 @@ const path = require("path");
 
 const config = require("./config/environment");
 const errorHandler = require("./middleware/errorHandler");
-const corsMiddleware = require("./middleware/corsMiddleware"); // ✅ Import your CORS middleware
+const corsMiddleware = require("./middleware/cors"); // ✅ Import your CORS middleware
 
 // Route imports
 const paymentRoutes = require("./routes/payment");
