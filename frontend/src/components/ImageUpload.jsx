@@ -1,3 +1,4 @@
+// Updated ImageUpload component - key changes marked with comments
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -8,9 +9,16 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
   const [uploadedImages, setUploadedImages] = useState([]);
   const { toast } = useToast();
 
-  // File validation
+  // ✅ SIMPLEST: Always use the backend URL from environment
+  const getApiUrl = (endpoint) => {
+    const backendUrl =
+      import.meta.env.BACKEND_URL ||
+      "localhost:3000"; // Fallback to localhost if not set
+    return `${backendUrl}${endpoint}`;
+  };
+
   const validateFile = (file) => {
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 5 * 1024 * 1024;
     const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
     if (file.size > maxSize) {
@@ -38,12 +46,10 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
 
-    // Validate files
     for (const file of files) {
       if (!validateFile(file)) return;
     }
 
-    // Check max files limit
     if (files.length > maxFiles) {
       toast({
         title: "Error",
@@ -60,9 +66,10 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
       const formData = new FormData();
 
       if (maxFiles === 1) {
-        // Single image upload - note changed endpoint matching backend
         formData.append("image", files[0]);
-        const response = await fetch("/api/upload/image", {
+
+        // ✅ FIXED: Use production-safe URL
+        const response = await fetch(getApiUrl("/api/upload/image"), {
           method: "POST",
           body: formData,
         });
@@ -73,10 +80,12 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
 
         const result = await response.json();
         if (result.success) {
+          // ✅ FIXED: Map backend response to frontend expectations
           const imageData = {
             ...result.data,
-            public_id: result.data.cloudinaryPublicId, // use cloudinaryPublicId from backend
-            fileId: result.data.fileId, // DB record id for deletion
+            fileId: result.data.cloudinaryPublicId, // Use cloudinaryPublicId as fileId
+            public_id: result.data.cloudinaryPublicId,
+            // No variations in backend, so use main URL
           };
 
           setUploadedImages([imageData]);
@@ -86,12 +95,13 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
             description: "Image uploaded successfully",
           });
         } else {
-          throw new Error(result.error || "Upload failed");
+          throw new Error(result.message || "Upload failed");
         }
       } else {
-        // Multiple images upload - endpoint renamed to /api/upload/images per backend
         files.forEach((file) => formData.append("images", file));
-        const response = await fetch("/api/upload/images", {
+
+        // ✅ FIXED: Use production-safe URL
+        const response = await fetch(getApiUrl("/api/upload/images"), {
           method: "POST",
           body: formData,
         });
@@ -102,10 +112,11 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
 
         const result = await response.json();
         if (result.success) {
+          // ✅ FIXED: Map backend response correctly
           const imagesData = result.data.map((item) => ({
             ...item,
+            fileId: item.cloudinaryPublicId, // Use cloudinaryPublicId as fileId
             public_id: item.cloudinaryPublicId,
-            fileId: item.fileId,
           }));
 
           setUploadedImages(imagesData);
@@ -115,7 +126,7 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
             description: `${result.data.length} images uploaded successfully`,
           });
         } else {
-          throw new Error(result.error || "Upload failed");
+          throw new Error(result.message || "Upload failed");
         }
       }
     } catch (error) {
@@ -127,15 +138,15 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
       });
     } finally {
       setUploading(false);
-      // Clear the input
       event.target.value = "";
     }
   };
 
-  // Delete must use DB fileId, not Cloudinary public ID
-  const removeImage = async (fileId) => {
+  // ✅ FIXED: Use correct delete endpoint that matches your backend
+  const removeImage = async (publicId) => {
     try {
-      const response = await fetch(`/api/upload/file/${fileId}`, {
+      // Use the actual backend endpoint with publicId
+      const response = await fetch(getApiUrl(`/api/upload/image/${publicId}`), {
         method: "DELETE",
       });
 
@@ -146,7 +157,7 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
       const result = await response.json();
       if (result.success) {
         setUploadedImages((prev) =>
-          prev.filter((img) => img.fileId !== fileId)
+          prev.filter((img) => img.fileId !== publicId)
         );
 
         toast({
@@ -154,7 +165,7 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
           description: "Image removed successfully",
         });
       } else {
-        throw new Error(result.error || "Delete failed");
+        throw new Error(result.message || "Delete failed");
       }
     } catch (error) {
       console.error("Delete error:", error);
@@ -216,15 +227,12 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
           {uploadedImages.map((image, index) => (
             <div key={image.fileId || index} className="relative group">
               <img
-                src={image.variations?.medium || image.url}
+                src={image.url} // ✅ FIXED: Use direct URL from backend
                 alt={`Upload ${index + 1}`}
                 className="w-full h-32 object-cover rounded-lg border shadow-sm"
-                onError={(e) => {
-                  e.target.src = image.url; // Fallback if medium variation fails
-                }}
               />
               <button
-                onClick={() => removeImage(image.fileId)}
+                onClick={() => removeImage(image.fileId)} // This is now cloudinaryPublicId
                 className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                 title="Remove image"
               >
