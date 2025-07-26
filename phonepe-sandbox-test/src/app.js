@@ -7,7 +7,7 @@ const path = require("path");
 
 const config = require("./config/environment");
 const errorHandler = require("./middleware/errorHandler");
-const corsMiddleware = require("./middleware/cors"); // ✅ Import your CORS middleware
+const corsMiddleware = require("./middleware/cors");
 
 // Route imports
 const paymentRoutes = require("./routes/payment");
@@ -21,9 +21,19 @@ const httpsRedirect = require("./middleware/httpsRedirect");
 const app = express();
 
 // Trust proxy - CRITICAL for Render/Netlify deployments
-app.set('trust proxy', true);
-// app.js
-// ✅ FIXED: Apply CORS FIRST, before HTTPS redirect
+app.set("trust proxy", true);
+
+// ✅ FIXED: Apply different CORS for different routes
+// Payment routes get special CORS treatment
+app.use(
+  ["/pay", "/redirect", "/callback", "/webhook"],
+  corsMiddleware.paymentCors()
+);
+
+// Regular API routes get standard CORS
+app.use("/api", corsMiddleware.basicCors());
+
+// General CORS for other routes
 app.use(corsMiddleware.basicCors());
 
 app.use(httpsRedirect);
@@ -42,12 +52,10 @@ app.use(
   })
 );
 
-
-
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 100,
   message: "Too many requests from this IP, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
@@ -57,7 +65,7 @@ app.use("/api/", limiter);
 // Strict rate limiting for payment endpoints
 const paymentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // limit each IP to 10 payment requests per windowMs
+  max: 10,
   message: "Too many payment attempts, please try again later.",
 });
 app.use("/pay", paymentLimiter);
@@ -107,7 +115,9 @@ app.use("/*catchAll", (req, res) => {
   });
 });
 
-// Global error handler - Use the handleErrors method
+// Global error handler
 app.use(errorHandler.handleErrors.bind(errorHandler));
+// Add CORS error handler
+app.use(corsMiddleware.handleCorsError);
 
 module.exports = app;

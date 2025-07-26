@@ -105,6 +105,59 @@ const Cart = () => {
     return items.reduce((total, item) => total + item.quantity, 0);
   };
 
+  // ✅ Helper function to render customization details
+  const renderCustomization = (item) => {
+    if (!item?.customization) return null;
+
+    const customization = item.customization;
+    const uploadedImage = customization.uploadedImage;
+
+    return (
+      <div className="mt-2 p-2 bg-gray-50 rounded-md">
+        <p className="text-xs text-gray-600 font-medium mb-2">
+          Customizations:
+        </p>
+
+        {/* Display uploaded image if it exists */}
+        {uploadedImage?.url && (
+          <div className="flex items-center gap-2 mb-2">
+            <img
+              src={uploadedImage.url}
+              alt="Custom upload"
+              className="w-12 h-12 object-cover rounded border"
+              onError={(e) => {
+                e.target.src = "/placeholder-image.jpg";
+              }}
+            />
+            <span className="text-xs text-gray-600">
+              {uploadedImage.fileName || "Custom Image"}
+            </span>
+          </div>
+        )}
+
+        {/* Display other customization options */}
+        {Object.entries(customization).map(([key, value]) => {
+          // Skip uploadedImage as we handle it separately
+          if (key === "uploadedImage") return null;
+
+          // Skip empty values
+          if (!value || value === "") return null;
+
+          return (
+            <div key={key} className="text-xs text-gray-600 mb-1">
+              <span className="font-medium capitalize">
+                {key.replace(/([A-Z])/g, " $1").trim()}:
+              </span>{" "}
+              <span>
+                {typeof value === "object" ? JSON.stringify(value) : value}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -173,23 +226,25 @@ const Cart = () => {
                         <h3 className="font-semibold text-gray-900 mb-1">
                           {item.name}
                         </h3>
+
+                        {/* Display variant info if available */}
+                        {item.variant && (
+                          <p className="text-sm text-gray-600 mb-1">
+                            Variant:{" "}
+                            {typeof item.variant === "object"
+                              ? Object.entries(item.variant)
+                                  .map(([k, v]) => `${k}: ${v}`)
+                                  .join(", ")
+                              : item.variant}
+                          </p>
+                        )}
+
                         <p className="text-2xl font-bold text-primary">
                           ₹{item.price}
                         </p>
 
-                        {item.customization && (
-                          <div className="mt-2 text-sm text-gray-600">
-                            {item.customization.text && (
-                              <p>Text: {item.customization.text}</p>
-                            )}
-                            {item.customization.color && (
-                              <p>Color: {item.customization.color}</p>
-                            )}
-                            {item.customization.uploadedImage && (
-                              <p>Image: {item.customization.uploadedImage}</p>
-                            )}
-                          </div>
-                        )}
+                        {/* ✅ FIXED: Safe customization rendering */}
+                        {renderCustomization(item)}
                       </div>
 
                       <div className="flex flex-col items-end gap-2">

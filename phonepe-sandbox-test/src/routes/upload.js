@@ -160,6 +160,49 @@ router.delete("/image/:publicId", async (req, res) => {
   }
 });
 
+// Add this to your existing upload router
+
+/**
+ * @route   POST /api/upload/customization-image
+ * @desc    Upload customization image
+ * @access  Public
+ */
+router.post("/customization-image", imageUpload.single("image"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No image file uploaded",
+      });
+    }
+
+    const { productId } = req.body;
+
+    console.log("Customization image uploaded successfully:", req.file.originalname);
+
+    res.json({
+      success: true,
+      message: "Customization image uploaded successfully",
+      data: {
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        url: req.file.path, // Cloudinary URL
+        cloudinaryPublicId: req.file.filename,
+        mimetype: req.file.mimetype,
+        productId: productId,
+      },
+    });
+  } catch (error) {
+    console.error("Customization image upload error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to upload customization image",
+    });
+  }
+});
+
+
 // Error handler for multer errors
 router.use((error, req, res, next) => {
   console.log("Upload error:", error);

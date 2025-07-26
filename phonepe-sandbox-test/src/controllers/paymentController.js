@@ -263,14 +263,13 @@ class PaymentController {
         console.log("❌ Payment failed with code:", code);
       }
 
-      // *** UPDATE DATABASE - Using existing columns only ***
+      // *** UPDATE DATABASE ***
       try {
         const { supabaseAdmin } = require("../config/supabaseClient");
 
         console.log("💾 Updating order in database...");
         console.log("Order ID to update:", orderId);
 
-        // Update only columns that exist in your schema
         const updateData = {
           status: orderStatus,
           payment_status: paymentStatus,
@@ -302,16 +301,13 @@ class PaymentController {
                   phonepe_txn_id: phonepeTransactionId,
                   status: paymentStatus,
                   amount: parseInt(amount) || updatedOrder[0].total_price,
-                  phonepe_response: JSON.stringify(req.body), // Store in payments table instead
+                  phonepe_response: JSON.stringify(req.body),
                   created_at: new Date().toISOString(),
                 },
               ]);
 
             if (paymentError) {
-              console.error(
-                "❌ Payment record insertion failed:",
-                paymentError
-              );
+              console.error("❌ Payment record insertion failed:", paymentError);
             } else {
               console.log("✅ Payment record inserted");
             }
@@ -323,14 +319,69 @@ class PaymentController {
         console.error("❌ Database error in redirect handler:", dbError);
       }
 
-      // Render payment result page
+      // ✅ FIXED: Redirect to frontend instead of rendering template
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+      
+      if (success) {
+        // Redirect to checkout with success parameters
+        const redirectUrl = `${frontendUrl}/checkout?status=success&orderId=${orderId}&transactionId=${phonepeTransactionId || ''}`;
+        console.log("🔗 Redirecting to frontend with success:", redirectUrl);
+        return res.redirect(redirectUrl);
+      } else {
+        // Redirect to checkout with failure parameters
+        const redirectUrl = `${frontendUrl}/checkout?status=failure&orderId=${orderId}&message=${encodeURIComponent('Payment failed')}`;
+        console.log("🔗 Redirecting to frontend with failure:", redirectUrl);
+        return res.redirect(redirectUrl);
+      }
+
+    } catch (error) {
+      console.error("❌ Redirect handler error:", error);
+      
+      // Redirect to frontend with error
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+      const redirectUrl = `${frontendUrl}/checkout?status=failure&message=${encodeURIComponent('Payment processing error')}`;
+      return res.redirect(redirectUrl);
+    }
+  }
+
+  // ✅ ADDED: Alternative method that renders template for debugging
+  static async handleRedirectWithTemplate(req, res) {
+    console.log("=== PHONEPE REDIRECT HANDLER (Template Version) ===");
+    console.log("Request body:", req.body);
+
+    try {
+      const { code, merchantId, transactionId, providerReferenceId, amount } =
+        req.body;
+
+      if (!transactionId) {
+        console.error("❌ Missing transaction ID in redirect");
+        return res.status(400).render("payment-failed", {
+          error: "Invalid payment response",
+          details: "Transaction ID missing",
+          orderId: "N/A",
+        });
+      }
+
+      const orderId = transactionId;
+      const phonepeTransactionId = providerReferenceId;
+      let success = code === "PAYMENT_SUCCESS";
+
+      // Update database (same as above)
+      // ... database update logic ...
+
+      // Render payment result page with redirect script
       return res.render("payment-success", {
         success: success,
         orderId: orderId,
         transactionId: phonepeTransactionId,
         frontendUrl: process.env.FRONTEND_URL || "http://localhost:5173",
         amount: amount || "N/A",
-        paymentStatus: paymentStatus,
+        paymentStatus: success ? "completed" : "failed",
+        // ✅ ADDED: Auto-redirect parameters
+        redirectToCheckout: true,
+        redirectUrl: success 
+          ? `/checkout?status=success&orderId=${orderId}&transactionId=${phonepeTransactionId || ''}`
+          : `/checkout?status=failure&orderId=${orderId}&message=${encodeURIComponent('Payment failed')}`
       });
     } catch (error) {
       console.error("❌ Redirect handler error:", error);
@@ -341,6 +392,7 @@ class PaymentController {
       });
     }
   }
+
 
   static async handleCallback(req, res) {
     console.log("=== PHONEPE CALLBACK HANDLER ===");

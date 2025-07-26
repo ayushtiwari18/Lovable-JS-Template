@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,16 +14,17 @@ const PHONEPE_PAY_URL = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/pay`
   : "http://localhost:3000/pay";
 
-
 const Checkout = () => {
   const navigate = useNavigate();
-  const { items, getTotalPrice, clearCart } = useCart();
+  const [searchParams] = useSearchParams(); // ✅ ADD THIS
+  const { items, getTotalPrice, clearCart, getCartForCheckout } = useCart();
   const { user } = useAuth();
   const { toast } = useToast();
   const payFormRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [processingPayment, setProcessingPayment] = useState(false);
+  
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -34,6 +35,23 @@ const Checkout = () => {
     state: "",
     zipCode: "",
   });
+
+  // ✅ ADD: Check for payment success/failure on component mount
+  useEffect(() => {
+    const paymentStatus = searchParams.get('status');
+    const orderId = searchParams.get('orderId');
+    const transactionId = searchParams.get('transactionId');
+
+    if (paymentStatus && orderId) {
+      if (paymentStatus === 'success') {
+        console.log("🎉 Payment success detected, handling...");
+        handlePaymentSuccess(orderId, transactionId);
+      } else if (paymentStatus === 'failure') {
+        console.log("❌ Payment failure detected");
+        handlePaymentFailure(orderId, searchParams.get('message'));
+      }
+    }
+  }, [searchParams]);
 
   // Add useEffect to redirect if cart becomes empty
   useEffect(() => {
@@ -136,6 +154,29 @@ const Checkout = () => {
     return true;
   };
 
+  // ✅ FIXED: Create order with proper customization_details
+  const createCustomizationDetails = (cartItems) => {
+    const customizationDetails = {};
+
+    cartItems.forEach((item) => {
+      if (item.customization && Object.keys(item.customization).length > 0) {
+        // Remove productId and productTitle from customization object for cleaner storage
+        const { productId, productTitle, ...actualCustomization } =
+          item.customization;
+
+        customizationDetails[item.productId || item.id] = {
+          productId: item.productId || item.id,
+          productTitle: item.name,
+          variantId: item.variantId || null,
+          customizations: actualCustomization,
+          timestamp: new Date().toISOString(),
+        };
+      }
+    });
+
+    return customizationDetails;
+  };
+
   const createOrder = async (paymentMethod = "PayNow") => {
     try {
       console.log("=== CREATING ORDER ===");
@@ -194,15 +235,25 @@ const Checkout = () => {
       const total = subtotal + tax;
       const totalPaise = Math.round(total * 100);
 
+      // ✅ FIXED: Get cart items with proper structure
+      const cartItems = getCartForCheckout();
+      const customizationDetails = createCustomizationDetails(cartItems);
+
+      console.log("Cart items for order:", cartItems);
+      console.log("Customization details:", customizationDetails);
+
       const orderData = {
-        user_id: authUser.id, // ✅ Use authUser.id
-        customer_id: customer.id, // ✅ Use customer.id
-        items: items.map((item) => ({
+        user_id: authUser.id,
+        customer_id: customer.id,
+        items: cartItems.map((item) => ({
           id: item.id,
+          productId: item.productId,
+          variantId: item.variantId,
           name: item.name,
           price: item.price,
           quantity: item.quantity,
           image: item.image || "",
+          variant: item.variant,
           customization: item.customization || {},
         })),
         shipping_info: {
@@ -226,6 +277,9 @@ const Checkout = () => {
         upi_reference: null,
         transaction_id: null,
         order_notes: null,
+        // ✅ FIXED: Add customization details
+        customization_details: customizationDetails,
+        requires_customization: Object.keys(customizationDetails).length > 0,
       };
 
       console.log("📦 Creating order with data:", orderData);
@@ -248,7 +302,6 @@ const Checkout = () => {
       throw error;
     }
   };
-
 
   // PayNow Handler - DON'T clear cart until payment succeeds
   const handlePayNow = async () => {
@@ -308,32 +361,99 @@ const Checkout = () => {
     }
   };
 
-  // In your payment success page/component
-const handlePaymentSuccess = async (orderId) => {
-  try {
-    // Verify payment with your backend first
-    const { data: order } = await supabase
-      .from("orders")
-      .select("payment_status")
-      .eq("id", orderId)
-      .single();
+  // ✅ USED: Payment success handler
+  const handlePaymentSuccess = async (orderId, transactionId = null) => {
+    try {
+      console.log("🎉 Processing payment success for order:", orderId);
+      setProcessingPayment(true);
 
-    if (order.payment_status === "completed") {
-      // NOW clear the cart
-      await clearCart();
-      
+      // Verify payment with your backend first
+      const { data: order, error: fetchError } = await supabase
+        .from("orders")
+        .select("payment_status, status, id")
+        .eq("id", orderId)
+        .single();
+
+      if (fetchError) {
+        throw new Error("Failed to fetch order details");
+      }
+
+      console.log("📋 Order status:", order);
+
+      if (order.payment_status === "completed" || order.payment_status === "success") {
+        // NOW clear the cart
+        console.log("🧹 Clearing cart after successful payment...");
+        await clearCart();
+        console.log("✅ Cart cleared successfully");
+
+        // Update order status if needed
+        if (transactionId) {
+          await supabase
+            .from("orders")
+            .update({ transaction_id: transactionId })
+            .eq("id", orderId);
+        }
+
+        toast({
+          title: "Payment Successful! 🎉",
+          description: "Your order has been confirmed. Redirecting...",
+          duration: 3000,
+        });
+
+        // Clear URL parameters and redirect
+        setTimeout(() => {
+          navigate(`/order/${orderId}`, { replace: true });
+        }, 2000);
+      } else {
+        // Payment verification failed
+        toast({
+          title: "Payment Verification Failed",
+          description: "Please contact support if money was deducted.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("❌ Payment verification failed:", error);
       toast({
-        title: "Payment Successful!",
-        description: "Your order has been confirmed.",
+        title: "Payment Verification Failed",
+        description: error.message || "Please contact support.",
+        variant: "destructive",
       });
-      
-      navigate(`/order/${orderId}`);
+    } finally {
+      setProcessingPayment(false);
     }
-  } catch (error) {
-    console.error("Payment verification failed:", error);
-  }
-};
+  };
 
+  // ✅ ADD: Payment failure handler
+  const handlePaymentFailure = async (orderId, message = null) => {
+    try {
+      console.log("❌ Processing payment failure for order:", orderId);
+      
+      // Update order status to failed
+      await supabase
+        .from("orders")
+        .update({ 
+          payment_status: "failed",
+          status: "cancelled",
+          order_notes: message || "Payment failed"
+        })
+        .eq("id", orderId);
+
+      toast({
+        title: "Payment Failed",
+        description: message || "Your payment was not processed. Please try again.",
+        variant: "destructive",
+      });
+
+      // Don't clear cart on failure - user can retry
+      console.log("🛒 Keeping cart for retry");
+      
+      setProcessingPayment(false);
+    } catch (error) {
+      console.error("Error handling payment failure:", error);
+      setProcessingPayment(false);
+    }
+  };
 
   // COD Handler - This is fine as is
   const handleCODPayment = async () => {
@@ -388,17 +508,40 @@ const handlePaymentSuccess = async (orderId) => {
     );
   }
 
+  // ✅ ADD: Show processing state during payment verification
+  if (processingPayment && (searchParams.get('status') === 'success' || searchParams.get('status') === 'failure')) {
+    return (
+      <Layout>
+        <div className="py-12">
+          <div className="container mx-auto px-4">
+            <div className="text-center">
+              <h1 className="text-2xl font-semibold mb-4">
+                {searchParams.get('status') === 'success' ? 'Processing Payment...' : 'Payment Failed'}
+              </h1>
+              <p className="text-gray-600">
+                {searchParams.get('status') === 'success' 
+                  ? 'Please wait while we confirm your payment.'
+                  : 'Your payment could not be processed.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   const subtotal = getTotalPrice();
   const tax = subtotal * 0.08;
   const total = subtotal + tax;
 
   return (
     <Layout>
+      {/* Your existing JSX remains exactly the same */}
       <div className="py-12">
         <div className="container mx-auto px-4">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Rest of your existing JSX remains the same */}
+            {/* Your existing form and order summary JSX */}
             <div className="space-y-8">
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">

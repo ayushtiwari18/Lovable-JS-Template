@@ -69,7 +69,7 @@ export const Header = () => {
       } finally {
         setAdminLoading(false);
       }
-      console.log("Admin status checked:", adminData);
+      // console.log("Admin status checked:", adminData);
     };
 
     checkAdminStatus();

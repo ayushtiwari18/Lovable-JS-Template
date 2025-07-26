@@ -14,21 +14,24 @@ export const useCart = () => {
 };
 
 export const CartProvider = ({ children }) => {
-  const { user } = useAuth(); // ✅ user is properly defined here
+  const { user } = useAuth();
   const { toast } = useToast();
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Add item to cart (either Supabase or localStorage)
-  const addItem = async (product, quantity = 1, customization = null) => {
+  // ✅ FIXED: Add item with proper customization handling
+  const addItem = async (itemData) => {
     try {
+      console.log("Adding item to cart:", itemData);
+
       if (user) {
-        // Authenticated user - add to Supabase
+        // For authenticated users - we'll store basic info in DB and full data in localStorage
+        // This is because cart_items table doesn't have customization fields
         const { data: existingItem, error: fetchError } = await supabase
           .from("cart_items")
           .select("id, quantity")
           .eq("user_id", user.id)
-          .eq("product_id", product.id)
+          .eq("product_id", itemData.productId || itemData.id)
           .single();
 
         if (fetchError && fetchError.code !== "PGRST116") {
@@ -40,7 +43,7 @@ export const CartProvider = ({ children }) => {
           const { error: updateError } = await supabase
             .from("cart_items")
             .update({
-              quantity: existingItem.quantity + quantity,
+              quantity: existingItem.quantity + (itemData.quantity || 1),
               updated_at: new Date().toISOString(),
             })
             .eq("id", existingItem.id);
@@ -52,12 +55,35 @@ export const CartProvider = ({ children }) => {
             .from("cart_items")
             .insert({
               user_id: user.id,
-              product_id: product.id,
-              quantity: quantity,
+              product_id: itemData.productId || itemData.id,
+              quantity: itemData.quantity || 1,
             });
 
           if (insertError) throw insertError;
         }
+
+        // Store full item data (including customization) in localStorage as backup
+        const localCartKey = `user_${user.id}_cart_details`;
+        const existingLocalCart = JSON.parse(
+          localStorage.getItem(localCartKey) || "[]"
+        );
+
+        const itemKey = generateItemKey(itemData);
+        const existingLocalIndex = existingLocalCart.findIndex(
+          (item) => generateItemKey(item) === itemKey
+        );
+
+        if (existingLocalIndex >= 0) {
+          existingLocalCart[existingLocalIndex].quantity +=
+            itemData.quantity || 1;
+        } else {
+          existingLocalCart.push({
+            ...itemData,
+            addedAt: new Date().toISOString(),
+          });
+        }
+
+        localStorage.setItem(localCartKey, JSON.stringify(existingLocalCart));
 
         // Refresh cart items
         await fetchCartItems();
@@ -66,24 +92,18 @@ export const CartProvider = ({ children }) => {
         const storedCart = JSON.parse(
           localStorage.getItem("cart_items") || "[]"
         );
-        const itemKey = `${product.id}-${JSON.stringify(customization || {})}`;
+        const itemKey = generateItemKey(itemData);
 
         const existingItemIndex = storedCart.findIndex(
-          (item) =>
-            `${item.id}-${JSON.stringify(item.customization || {})}` === itemKey
+          (item) => generateItemKey(item) === itemKey
         );
 
         if (existingItemIndex >= 0) {
-          storedCart[existingItemIndex].quantity += quantity;
+          storedCart[existingItemIndex].quantity += itemData.quantity || 1;
         } else {
           storedCart.push({
-            id: product.id,
-            name: product.title || product.name,
-            price: product.price,
-            image: product.image_url || product.image,
-            category: product.category,
-            quantity: quantity,
-            customization: customization,
+            ...itemData,
+            addedAt: new Date().toISOString(),
           });
         }
 
@@ -94,7 +114,7 @@ export const CartProvider = ({ children }) => {
       toast({
         title: "Added to Cart",
         description: `${
-          product.title || product.name
+          itemData.name || itemData.title
         } has been added to your cart.`,
       });
     } catch (error) {
@@ -107,202 +127,24 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Update item quantity - Fixed function signature
-  const updateQuantity = async (item, newQuantity) => {
-    if (newQuantity < 1) {
-      await removeFromCart(item);
-      return;
-    }
-
-    try {
-      if (user) {
-        // For authenticated users, use cartId
-        const { error } = await supabase
-          .from("cart_items")
-          .update({
-            quantity: newQuantity,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", item.cartId);
-
-        if (error) throw error;
-
-        // Update local state
-        setCartItems((prev) =>
-          prev.map((cartItem) =>
-            cartItem.cartId === item.cartId
-              ? { ...cartItem, quantity: newQuantity }
-              : cartItem
-          )
-        );
-      } else {
-        // Guest user - update localStorage
-        const itemKey = `${item.id}-${JSON.stringify(
-          item.customization || {}
-        )}`;
-        const storedCart = JSON.parse(
-          localStorage.getItem("cart_items") || "[]"
-        );
-        const updatedCart = storedCart.map((cartItem) =>
-          `${cartItem.id}-${JSON.stringify(cartItem.customization || {})}` ===
-          itemKey
-            ? { ...cartItem, quantity: newQuantity }
-            : cartItem
-        );
-
-        localStorage.setItem("cart_items", JSON.stringify(updatedCart));
-        setCartItems(updatedCart);
-      }
-    } catch (error) {
-      console.error("Error updating quantity:", error);
-      throw error; // Let calling component handle the error
-    }
+  // ✅ Helper function to generate unique item key including customization
+  const generateItemKey = (item) => {
+    const baseKey = `${item.productId || item.id}-${
+      item.variantId || "no-variant"
+    }`;
+    const customizationKey = item.customization
+      ? btoa(JSON.stringify(item.customization)).slice(0, 8)
+      : "no-custom";
+    return `${baseKey}-${customizationKey}`;
   };
 
-  // Remove item from cart - Fixed function signature
-  const removeFromCart = async (item) => {
-    try {
-      if (user) {
-        // For authenticated users, use cartId
-        const { error } = await supabase
-          .from("cart_items")
-          .delete()
-          .eq("id", item.cartId);
-
-        if (error) throw error;
-
-        // Update local state
-        setCartItems((prev) =>
-          prev.filter((cartItem) => cartItem.cartId !== item.cartId)
-        );
-      } else {
-        // Guest user - remove from localStorage
-        const itemKey = `${item.id}-${JSON.stringify(
-          item.customization || {}
-        )}`;
-        const storedCart = JSON.parse(
-          localStorage.getItem("cart_items") || "[]"
-        );
-        const updatedCart = storedCart.filter(
-          (cartItem) =>
-            `${cartItem.id}-${JSON.stringify(cartItem.customization || {})}` !==
-            itemKey
-        );
-
-        localStorage.setItem("cart_items", JSON.stringify(updatedCart));
-        setCartItems(updatedCart);
-      }
-    } catch (error) {
-      console.error("Error removing item:", error);
-      throw error; // Let calling component handle the error
-    }
-  };
-
-  // Clear entire cart - FIXED
-  const clearCart = async () => {
-    try {
-      console.log("🧹 Clearing cart...");
-
-      if (user) {
-        // Clear cart from database
-        const { error } = await supabase
-          .from("cart_items")
-          .delete()
-          .eq("user_id", user.id);
-
-        if (error) {
-          console.error("Database clear error:", error);
-          throw error;
-        }
-        console.log("✅ Database cart cleared");
-      } else {
-        // Clear from localStorage
-        localStorage.removeItem("cart_items");
-        console.log("✅ LocalStorage cart cleared");
-      }
-
-      // Clear context state - FIXED: Use cartItems, not items
-      setCartItems([]);
-      console.log("✅ Context state cleared");
-
-      toast({
-        title: "Cart Cleared",
-        description: "Your cart has been cleared successfully.",
-      });
-    } catch (error) {
-      console.error("Failed to clear cart:", error);
-      toast({
-        title: "Error",
-        description: "Failed to clear cart.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // ✅ FIXED: Restore cart from order function
-  const restoreCartFromOrder = async (order) => {
-    try {
-      console.log("🔄 Restoring cart from order:", order.id);
-
-      // Clear current cart first
-      if (user) {
-        await supabase.from("cart_items").delete().eq("user_id", user.id);
-      } else {
-        localStorage.removeItem("cart_items");
-      }
-
-      // Restore items from order
-      const orderItems = order.items || [];
-
-      if (user) {
-        // For authenticated users - add to database
-        const cartInserts = orderItems.map((item) => ({
-          user_id: user.id,
-          product_id: item.id,
-          quantity: item.quantity,
-        }));
-
-        if (cartInserts.length > 0) {
-          const { error } = await supabase
-            .from("cart_items")
-            .insert(cartInserts);
-
-          if (error) throw error;
-        }
-
-        // Refresh cart from database
-        await fetchCartItems();
-      } else {
-        // For guest users - add to localStorage
-        const cartItems = orderItems.map((item) => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          image: item.image,
-          quantity: item.quantity,
-          customization: item.customization || null,
-        }));
-
-        localStorage.setItem("cart_items", JSON.stringify(cartItems));
-        setCartItems(cartItems);
-      }
-
-      toast({
-        title: "Cart Restored",
-        description: `${orderItems.length} items restored from your previous order.`,
-      });
-    } catch (error) {
-      console.error("Error restoring cart:", error);
-      throw error;
-    }
-  };
-
-  // Fetch cart items from Supabase or localStorage
+  // ✅ FIXED: Fetch cart items with customization data
   const fetchCartItems = async () => {
     setLoading(true);
 
     try {
       if (user) {
+        // Get basic cart data from database
         const { data: cartData, error } = await supabase
           .from("cart_items")
           .select(
@@ -328,20 +170,38 @@ export const CartProvider = ({ children }) => {
 
         if (error) throw error;
 
+        // Get detailed cart data (including customization) from localStorage
+        const localCartKey = `user_${user.id}_cart_details`;
+        const localCartDetails = JSON.parse(
+          localStorage.getItem(localCartKey) || "[]"
+        );
+
         const transformedItems =
-          cartData?.map((item) => ({
-            id: item.product_id,
-            name: item.products?.title,
-            price: item.products?.price,
-            image: item.products?.image_url,
-            category: item.products?.categories?.name || "Product",
-            quantity: item.quantity,
-            cartId: item.id,
-            customization: null,
-          })) || [];
+          cartData?.map((item) => {
+            // Find matching detailed item
+            const detailedItem = localCartDetails.find(
+              (local) => (local.productId || local.id) === item.product_id
+            );
+
+            return {
+              id: item.product_id,
+              productId: item.product_id,
+              name: item.products?.title,
+              price: item.products?.price || 0,
+              image: item.products?.image_url,
+              category: item.products?.categories?.name || "Product",
+              quantity: item.quantity,
+              cartId: item.id,
+              variantId: detailedItem?.variantId || null,
+              variant: detailedItem?.variant || null,
+              customization: detailedItem?.customization || {},
+              addedAt: item.created_at,
+            };
+          }) || [];
 
         setCartItems(transformedItems);
       } else {
+        // Guest user - get from localStorage
         const storedCart = JSON.parse(
           localStorage.getItem("cart_items") || "[]"
         );
@@ -359,7 +219,194 @@ export const CartProvider = ({ children }) => {
     }
   };
 
+  // ✅ FIXED: Update quantity with customization handling
+  const updateQuantity = async (item, newQuantity) => {
+    if (newQuantity < 1) {
+      await removeFromCart(item);
+      return;
+    }
+
+    try {
+      if (user) {
+        // Update database
+        const { error } = await supabase
+          .from("cart_items")
+          .update({
+            quantity: newQuantity,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", item.cartId);
+
+        if (error) throw error;
+
+        // Update localStorage details
+        const localCartKey = `user_${user.id}_cart_details`;
+        const localCartDetails = JSON.parse(
+          localStorage.getItem(localCartKey) || "[]"
+        );
+        const updatedLocalCart = localCartDetails.map((localItem) =>
+          (localItem.productId || localItem.id) === item.productId &&
+          JSON.stringify(localItem.customization) ===
+            JSON.stringify(item.customization)
+            ? { ...localItem, quantity: newQuantity }
+            : localItem
+        );
+        localStorage.setItem(localCartKey, JSON.stringify(updatedLocalCart));
+
+        // Update local state
+        setCartItems((prev) =>
+          prev.map((cartItem) =>
+            cartItem.cartId === item.cartId
+              ? { ...cartItem, quantity: newQuantity }
+              : cartItem
+          )
+        );
+      } else {
+        // Guest user - update localStorage
+        const itemKey = generateItemKey(item);
+        const storedCart = JSON.parse(
+          localStorage.getItem("cart_items") || "[]"
+        );
+        const updatedCart = storedCart.map((cartItem) =>
+          generateItemKey(cartItem) === itemKey
+            ? { ...cartItem, quantity: newQuantity }
+            : cartItem
+        );
+
+        localStorage.setItem("cart_items", JSON.stringify(updatedCart));
+        setCartItems(updatedCart);
+      }
+    } catch (error) {
+      console.error("Error updating quantity:", error);
+      throw error;
+    }
+  };
+
+  // ✅ FIXED: Remove item with customization handling
+  const removeFromCart = async (item) => {
+    try {
+      if (user) {
+        // Remove from database
+        const { error } = await supabase
+          .from("cart_items")
+          .delete()
+          .eq("id", item.cartId);
+
+        if (error) throw error;
+
+        // Remove from localStorage details
+        const localCartKey = `user_${user.id}_cart_details`;
+        const localCartDetails = JSON.parse(
+          localStorage.getItem(localCartKey) || "[]"
+        );
+        const updatedLocalCart = localCartDetails.filter(
+          (localItem) =>
+            !(
+              (localItem.productId || localItem.id) === item.productId &&
+              JSON.stringify(localItem.customization) ===
+                JSON.stringify(item.customization)
+            )
+        );
+        localStorage.setItem(localCartKey, JSON.stringify(updatedLocalCart));
+
+        // Update local state
+        setCartItems((prev) =>
+          prev.filter((cartItem) => cartItem.cartId !== item.cartId)
+        );
+      } else {
+        // Guest user - remove from localStorage
+        const itemKey = generateItemKey(item);
+        const storedCart = JSON.parse(
+          localStorage.getItem("cart_items") || "[]"
+        );
+        const updatedCart = storedCart.filter(
+          (cartItem) => generateItemKey(cartItem) !== itemKey
+        );
+
+        localStorage.setItem("cart_items", JSON.stringify(updatedCart));
+        setCartItems(updatedCart);
+      }
+    } catch (error) {
+      console.error("Error removing item:", error);
+      throw error;
+    }
+  };
+
+  // In CartContext.js, modify the clearCart function to be more robust
+  const clearCart = async () => {
+    try {
+      console.log("🧹 Clearing cart...");
+
+      if (user) {
+        // Clear cart from database
+        const { error } = await supabase
+          .from("cart_items")
+          .delete()
+          .eq("user_id", user.id);
+
+        if (error) {
+          console.error("Database clear error:", error);
+          // Don't throw error, continue with localStorage clearing
+        }
+
+        // Clear localStorage details
+        const localCartKey = `user_${user.id}_cart_details`;
+        localStorage.removeItem(localCartKey);
+      } else {
+        // Clear from localStorage
+        localStorage.removeItem("cart_items");
+      }
+
+      // Always clear context state
+      setCartItems([]);
+
+      console.log("✅ Cart cleared successfully");
+    } catch (error) {
+      console.error("Failed to clear cart:", error);
+      // Still clear the UI state even if database fails
+      setCartItems([]);
+    }
+  };
+
+  // Rest of your existing functions...
+  const getTotalPrice = () => {
+    return cartItems.reduce(
+      (total, item) => total + (item.price || 0) * item.quantity,
+      0
+    );
+  };
+
+  const getTotalItems = () => {
+    return cartItems.reduce((total, item) => total + item.quantity, 0);
+  };
+
+  // ✅ FIXED: Get cart for checkout with proper structure
+  const getCartForCheckout = () => {
+    return cartItems.map((item) => ({
+      id: item.id,
+      productId: item.productId || item.id,
+      variantId: item.variantId,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      image: item.image,
+      variant: item.variant,
+      customization: item.customization || {},
+    }));
+  };
+
+  // Initialize cart on mount
+  useEffect(() => {
+    fetchCartItems();
+  }, [user]);
+
   // Sync localStorage cart to database when user logs in
+  useEffect(() => {
+    if (user) {
+      syncCartToDatabase();
+    }
+  }, [user]);
+
   const syncCartToDatabase = async () => {
     if (!user) return;
 
@@ -367,38 +414,33 @@ export const CartProvider = ({ children }) => {
       const storedCart = JSON.parse(localStorage.getItem("cart_items") || "[]");
       if (storedCart.length === 0) return;
 
-      const { data: existingCart } = await supabase
-        .from("cart_items")
-        .select("product_id, quantity, id")
-        .eq("user_id", user.id);
-
-      const existingProductMap = new Map(
-        existingCart?.map((item) => [item.product_id, item]) || []
+      // Move guest cart to user-specific localStorage
+      const localCartKey = `user_${user.id}_cart_details`;
+      const existingUserCart = JSON.parse(
+        localStorage.getItem(localCartKey) || "[]"
       );
 
-      for (const item of storedCart) {
-        const existingItem = existingProductMap.get(item.id);
+      const mergedCart = [...existingUserCart];
 
-        if (existingItem) {
-          const newQuantity = existingItem.quantity + item.quantity;
-          await supabase
-            .from("cart_items")
-            .update({
-              quantity: newQuantity,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", existingItem.id);
+      for (const guestItem of storedCart) {
+        const existingIndex = mergedCart.findIndex(
+          (item) => generateItemKey(item) === generateItemKey(guestItem)
+        );
+
+        if (existingIndex >= 0) {
+          mergedCart[existingIndex].quantity += guestItem.quantity;
         } else {
-          await supabase.from("cart_items").insert({
-            user_id: user.id,
-            product_id: item.id,
-            quantity: item.quantity,
-          });
+          mergedCart.push(guestItem);
         }
       }
 
+      localStorage.setItem(localCartKey, JSON.stringify(mergedCart));
       localStorage.removeItem("cart_items");
-      await fetchCartItems();
+
+      // Sync basic data to database
+      for (const item of mergedCart) {
+        await addItem(item);
+      }
 
       if (storedCart.length > 0) {
         toast({
@@ -411,60 +453,18 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  const getTotalPrice = () => {
-    return cartItems.reduce(
-      (total, item) => total + item.price * item.quantity,
-      0
-    );
-  };
-
-  const getTotalItems = () => {
-    return cartItems.reduce((total, item) => total + item.quantity, 0);
-  };
-
-  const getCartForCheckout = () => {
-    return cartItems.map((item) => ({
-      product_id: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: item.quantity,
-      customization: item.customization,
-      image: item.image,
-    }));
-  };
-
-  useEffect(() => {
-    fetchCartItems();
-  }, [user]);
-
-  useEffect(() => {
-    if (user) {
-      syncCartToDatabase();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!user && cartItems.length > 0) {
-      const hasNonDatabaseItems = cartItems.some((item) => !item.cartId);
-      if (hasNonDatabaseItems) {
-        localStorage.setItem("cart_items", JSON.stringify(cartItems));
-      }
-    }
-  }, [cartItems, user]);
-
   const value = {
-    items: cartItems, // Export as 'items' for consistency
+    items: cartItems,
     loading,
     addItem,
     updateQuantity,
-    removeFromCart, // Export as 'removeFromCart'
+    removeFromCart,
     clearCart,
     getTotalPrice,
     getTotalItems,
     getCartForCheckout,
     fetchCartItems,
     syncCartToDatabase,
-    restoreCartFromOrder, // ✅ Added to context value
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

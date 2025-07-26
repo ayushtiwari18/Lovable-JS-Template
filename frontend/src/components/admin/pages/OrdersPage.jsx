@@ -154,9 +154,14 @@ export function OrdersPage() {
           `
           *,
           customers (
+            id,
+            user_id,
             name,
             email,
-            phone
+            phone,
+            address,
+            bio,
+            created_at
           )
         `
         )
@@ -328,9 +333,14 @@ export function OrdersPage() {
     );
   };
 
-  // Format shipping info for display
+  // Format shipping info for display - FIXED VERSION
   const formatShippingInfo = (shippingInfo) => {
-    if (!shippingInfo) return null;
+    if (!shippingInfo || typeof shippingInfo !== "object")
+      return (
+        <p className="text-sm text-muted-foreground">
+          No shipping information available
+        </p>
+      );
 
     return (
       <div className="space-y-3">
@@ -338,7 +348,7 @@ export function OrdersPage() {
           <div>
             <span className="font-medium text-sm">Address:</span>
             <p className="text-sm text-muted-foreground mt-1 break-words">
-              {shippingInfo.address}
+              {String(shippingInfo.address)}
             </p>
           </div>
         )}
@@ -346,25 +356,25 @@ export function OrdersPage() {
           {shippingInfo.city && (
             <div className="flex justify-between">
               <span className="font-medium text-sm">City:</span>
-              <span className="text-sm">{shippingInfo.city}</span>
+              <span className="text-sm">{String(shippingInfo.city)}</span>
             </div>
           )}
           {shippingInfo.state && (
             <div className="flex justify-between">
               <span className="font-medium text-sm">State:</span>
-              <span className="text-sm">{shippingInfo.state}</span>
+              <span className="text-sm">{String(shippingInfo.state)}</span>
             </div>
           )}
           {shippingInfo.pincode && (
             <div className="flex justify-between">
               <span className="font-medium text-sm">Pincode:</span>
-              <span className="text-sm">{shippingInfo.pincode}</span>
+              <span className="text-sm">{String(shippingInfo.pincode)}</span>
             </div>
           )}
           {shippingInfo.phone && (
             <div className="flex justify-between">
               <span className="font-medium text-sm">Phone:</span>
-              <span className="text-sm">{shippingInfo.phone}</span>
+              <span className="text-sm">{String(shippingInfo.phone)}</span>
             </div>
           )}
         </div>
@@ -372,48 +382,73 @@ export function OrdersPage() {
     );
   };
 
-  // Format order items for display
+  // Format order items for display - FIXED VERSION
   const formatOrderItems = (items) => {
-    if (!items || !Array.isArray(items)) return null;
+    if (!items)
+      return (
+        <p className="text-sm text-muted-foreground">No items available</p>
+      );
+
+    // Handle case where items might be a string (JSON) or already an array
+    let parsedItems = items;
+    if (typeof items === "string") {
+      try {
+        parsedItems = JSON.parse(items);
+      } catch (e) {
+        console.error("Failed to parse items:", e);
+        return (
+          <p className="text-sm text-muted-foreground">Invalid items data</p>
+        );
+      }
+    }
+
+    if (!Array.isArray(parsedItems)) {
+      return (
+        <p className="text-sm text-muted-foreground">No items available</p>
+      );
+    }
 
     return (
       <div className="space-y-4">
-        {items.map((item, index) => (
+        {parsedItems.map((item, index) => (
           <div key={index} className="border rounded-lg p-3 sm:p-4 bg-muted/30">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 space-y-2 sm:space-y-0">
               <h4 className="font-medium text-sm sm:text-base break-words">
-                {item.name || item.title || `Item ${index + 1}`}
+                {String(item.name || item.title || `Item ${index + 1}`)}
               </h4>
               <Badge variant="outline" className="self-start">
-                ₹{item.price || item.amount || 0}
+                ₹{String(item.price || item.amount || 0)}
               </Badge>
             </div>
 
             {item.description && (
               <p className="text-sm text-muted-foreground mb-2 break-words">
-                {item.description}
+                {String(item.description)}
               </p>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-sm">
               {item.quantity && (
                 <div>
-                  <span className="font-medium">Quantity:</span> {item.quantity}
+                  <span className="font-medium">Quantity:</span>{" "}
+                  {String(item.quantity)}
                 </div>
               )}
               {item.size && (
                 <div>
-                  <span className="font-medium">Size:</span> {item.size}
+                  <span className="font-medium">Size:</span> {String(item.size)}
                 </div>
               )}
               {item.color && (
                 <div>
-                  <span className="font-medium">Color:</span> {item.color}
+                  <span className="font-medium">Color:</span>{" "}
+                  {String(item.color)}
                 </div>
               )}
               {item.material && (
                 <div>
-                  <span className="font-medium">Material:</span> {item.material}
+                  <span className="font-medium">Material:</span>{" "}
+                  {String(item.material)}
                 </div>
               )}
             </div>
@@ -421,7 +456,7 @@ export function OrdersPage() {
             {item.customization && (
               <div className="mt-2 p-2 bg-blue-50 rounded text-sm break-words">
                 <span className="font-medium">Customization:</span>{" "}
-                {item.customization}
+                {String(item.customization)}
               </div>
             )}
           </div>
@@ -568,7 +603,7 @@ export function OrdersPage() {
             <div className="text-lg sm:text-xl lg:text-2xl font-bold truncate">
               ₹
               {orders
-                .reduce((sum, o) => sum + (o.amount || 0), 0)
+                .reduce((sum, o) => sum + (Number(o.amount) || 0), 0)
                 .toLocaleString()}
             </div>
           </CardContent>
@@ -650,10 +685,12 @@ export function OrdersPage() {
                         {order.production_status && (
                           <Badge variant="outline" className="text-xs">
                             <span className="hidden sm:inline">
-                              {order.production_status}
+                              {String(order.production_status)}
                             </span>
                             <span className="sm:hidden">
-                              {order.production_status.charAt(0).toUpperCase()}
+                              {String(order.production_status)
+                                .charAt(0)
+                                .toUpperCase()}
                             </span>
                           </Badge>
                         )}
@@ -752,24 +789,103 @@ export function OrdersPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
+                    {selectedOrder.customers?.id && (
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="font-medium text-sm">
+                          Customer ID:
+                        </span>
+                        <span className="text-sm font-mono break-all">
+                          {String(selectedOrder.customers.id)}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
                       <span className="font-medium text-sm">Name:</span>
                       <span className="text-sm break-words">
-                        {selectedOrder.customers?.name || "N/A"}
+                        {String(selectedOrder.customers?.name || "N/A")}
                       </span>
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                      <span className="font-medium text-sm">Email:</span>
-                      <span className="text-sm break-all">
-                        {selectedOrder.customers?.email || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                      <span className="font-medium text-sm">Phone:</span>
-                      <span className="text-sm">
-                        {selectedOrder.customers?.phone || "N/A"}
-                      </span>
-                    </div>
+
+                    {selectedOrder.customers?.email && (
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="font-medium text-sm">Email:</span>
+                        <span className="text-sm break-all">
+                          {String(selectedOrder.customers.email)}
+                        </span>
+                      </div>
+                    )}
+
+                    {selectedOrder.customers?.phone && (
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="font-medium text-sm">Phone:</span>
+                        <span className="text-sm">
+                          {String(selectedOrder.customers.phone)}
+                        </span>
+                      </div>
+                    )}
+
+                    {selectedOrder.customers?.address && (
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-sm">Address:</span>
+                        <div className="text-sm bg-muted p-2 rounded break-words">
+                          {typeof selectedOrder.customers.address === "string"
+                            ? String(selectedOrder.customers.address)
+                            : JSON.stringify(
+                                selectedOrder.customers.address,
+                                null,
+                                2
+                              )}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedOrder.customers?.bio && (
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-sm">Bio:</span>
+                        <p className="text-sm text-muted-foreground break-words">
+                          {String(selectedOrder.customers.bio)}
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedOrder.customers?.created_at && (
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="font-medium text-sm">
+                          Customer Since:
+                        </span>
+                        <span className="text-sm">
+                          {new Date(
+                            selectedOrder.customers.created_at
+                          ).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </div>
+                    )}
+
+                    {selectedOrder.customers?.user_id && (
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="font-medium text-sm">User ID:</span>
+                        <span className="text-sm font-mono break-all">
+                          {String(selectedOrder.customers.user_id)}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Fallback if customer info is missing */}
+                    {!selectedOrder.customers && selectedOrder.customer_id && (
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="font-medium text-sm">
+                          Customer ID:
+                        </span>
+                        <span className="text-sm font-mono break-all">
+                          {String(selectedOrder.customer_id)}
+                        </span>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -799,7 +915,7 @@ export function OrdersPage() {
                     <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
                       <span className="font-medium text-sm">Total Amount:</span>
                       <span className="font-bold text-base sm:text-lg">
-                        ₹{selectedOrder.amount}
+                        ₹{String(selectedOrder.amount || 0)}
                       </span>
                     </div>
                     {selectedOrder.transaction_id && (
@@ -808,7 +924,7 @@ export function OrdersPage() {
                           Transaction ID:
                         </span>
                         <span className="text-sm font-mono break-all">
-                          {selectedOrder.transaction_id}
+                          {String(selectedOrder.transaction_id)}
                         </span>
                       </div>
                     )}
@@ -847,7 +963,9 @@ export function OrdersPage() {
                               Estimated Date:
                             </span>
                             <p className="text-sm">
-                              {selectedOrder.delivery_info.estimated_date}
+                              {String(
+                                selectedOrder.delivery_info.estimated_date
+                              )}
                             </p>
                           </div>
                         )}
@@ -857,7 +975,9 @@ export function OrdersPage() {
                               Estimated Time:
                             </span>
                             <p className="text-sm">
-                              {selectedOrder.delivery_info.estimated_time}
+                              {String(
+                                selectedOrder.delivery_info.estimated_time
+                              )}
                             </p>
                           </div>
                         )}
@@ -876,7 +996,7 @@ export function OrdersPage() {
                     </CardHeader>
                     <CardContent>
                       <p className="text-sm bg-muted p-3 rounded break-words">
-                        {selectedOrder.order_notes}
+                        {String(selectedOrder.order_notes)}
                       </p>
                     </CardContent>
                   </Card>

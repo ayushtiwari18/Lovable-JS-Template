@@ -139,12 +139,12 @@ const ProductCustomization = ({
             >
               <Upload className="h-4 w-4 mr-2" />
               {customization.uploadedImage
-                ? customization.uploadedImage.name
+                ? customization.uploadedImage.fileName
                 : "Choose Image File"}
             </Button>
             {customization.uploadedImage && (
               <p className="text-xs text-purple-600 mt-2">
-                Selected: {customization.uploadedImage.name}
+                Selected: {customization.uploadedImage.fileName}
               </p>
             )}
           </div>
