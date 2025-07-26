@@ -1,6 +1,7 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tsconfigPaths from "vite-tsconfig-paths";
+const target =
+  process.env.NODE_ENV === "production"
+    ? "https://shrifal-handicrafts.onrender.com"
+    : "http://localhost:3000";
 
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
@@ -12,8 +13,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target:
-          "http://localhost:3000" || "https://shrifal-handicrafts.onrender.com", // adjust to your backend port
+        target,
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, "/api"),
