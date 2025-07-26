@@ -12,8 +12,8 @@ const ImageUpload = ({ onUploadSuccess, maxFiles = 1, accept = "image/*" }) => {
   // ✅ SIMPLEST: Always use the backend URL from environment
   const getApiUrl = (endpoint) => {
     const backendUrl =
-      import.meta.env.BACKEND_URL ||
-      "localhost:3000"; // Fallback to localhost if not set
+      import.meta.env.VITE_BACKEND_URL ||
+      "http://localhost:3000"; // Fallback to localhost if not set
     return `${backendUrl}${endpoint}`;
   };
 
