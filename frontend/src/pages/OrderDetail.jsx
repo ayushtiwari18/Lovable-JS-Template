@@ -44,6 +44,133 @@ const PHONEPE_PAY_URL =
     ? "https://shrifal-handicrafts.onrender.com/pay" // Replace with your actual Render URL
     : "http://localhost:3000/pay";
 
+// Add this helper function at the top of your component, after the imports
+const renderCustomizationDetails = (item, customizationDetails) => {
+  if (!customizationDetails) return null;
+
+  // Parse customization_details if it's a string
+  let customizationObj = {};
+  if (typeof customizationDetails === "string") {
+    try {
+      customizationObj = JSON.parse(customizationDetails);
+    } catch (e) {
+      console.error("Invalid customizationDetails JSON", e);
+      return null;
+    }
+  } else if (
+    typeof customizationDetails === "object" &&
+    customizationDetails !== null
+  ) {
+    customizationObj = customizationDetails;
+  }
+
+  // Use productId to lookup customization from customization_details
+  const productId = item.productId || item.id;
+  const customizationDetail = customizationObj[productId];
+
+  // If no direct match and single item, use the only available customization
+  if (!customizationDetail && Object.keys(customizationObj).length === 1) {
+    const onlyKey = Object.keys(customizationObj)[0];
+    const singleCustomization = customizationObj[onlyKey];
+    if (singleCustomization?.customizations) {
+      return renderCustomizationContent(singleCustomization);
+    }
+  }
+
+  if (!customizationDetail?.customizations) return null;
+
+  return renderCustomizationContent(customizationDetail);
+};
+
+const renderCustomizationContent = (customizationDetail) => {
+  const customizations = customizationDetail.customizations;
+
+  const customText = customizations.text ? customizations.text.trim() : "";
+  const customSize = customizations.size ? customizations.size.trim() : "";
+  const customColor = customizations.color ? customizations.color.trim() : "";
+  const customUploadedImage = customizations.uploadedImage || null;
+  const productTitle = customizationDetail.productTitle
+    ? customizationDetail.productTitle.trim()
+    : "";
+
+  // Check if there's any meaningful customization data
+  const hasAnyCustomizationData =
+    customText !== "" ||
+    customSize !== "" ||
+    customColor !== "" ||
+    (customUploadedImage &&
+      customUploadedImage.url &&
+      customUploadedImage.url.trim() !== "") ||
+    productTitle !== "";
+
+  if (!hasAnyCustomizationData) return null;
+
+  return (
+    <div className="p-2 sm:p-3 bg-orange-50 rounded-lg border border-orange-200">
+      <div className="flex items-center gap-2 mb-2">
+        <Wrench className="h-3 w-3 sm:h-4 sm:w-4 text-orange-600" />
+        <span className="text-xs sm:text-sm font-medium text-orange-800">
+          Customization Details
+        </span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+        {customText !== "" && (
+          <div className="flex items-center gap-1">
+            <FileText className="h-3 w-3 text-orange-600" />
+            <span>Text: {customText}</span>
+          </div>
+        )}
+        {customSize !== "" && (
+          <div className="flex items-center gap-1">
+            <Ruler className="h-3 w-3 text-orange-600" />
+            <span>Size: {customSize}</span>
+          </div>
+        )}
+        {customColor !== "" && (
+          <div className="flex items-center gap-1">
+            <Palette className="h-3 w-3 text-orange-600" />
+            <span>Color: {customColor}</span>
+          </div>
+        )}
+        {productTitle !== "" && (
+          <div className="flex items-center gap-1">
+            <Package className="h-3 w-3 text-orange-600" />
+            <span>Product: {productTitle}</span>
+          </div>
+        )}
+        {customUploadedImage?.url && (
+          <div className="col-span-full">
+            <div className="flex items-center gap-1 mb-2">
+              <ImageIcon className="h-3 w-3 text-orange-600" />
+              <span>Uploaded Image:</span>
+            </div>
+            <img
+              src={customUploadedImage.url}
+              alt={customUploadedImage.fileName || "Custom Image"}
+              className="max-w-full h-auto rounded shadow border"
+              style={{ maxHeight: "120px" }}
+              onError={(e) => {
+                e.target.style.display = "none";
+              }}
+            />
+            {customUploadedImage.fileName && (
+              <p className="text-xs text-gray-500 mt-1">
+                File: {customUploadedImage.fileName}
+              </p>
+            )}
+          </div>
+        )}
+        {customizationDetail.timestamp && (
+          <div className="col-span-full text-xs text-gray-500 pt-1 border-t border-orange-200">
+            Customized:{" "}
+            {new Date(customizationDetail.timestamp).toLocaleString()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ----- Status helpers -----
 const getStatusIcon = (status) => {
   switch (status?.toLowerCase()) {
@@ -129,7 +256,7 @@ export default function OrderDetail() {
       setLoading(true);
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
+        .select("*, customization_details") // Add customization_details to the select
         .eq("id", orderId)
         .eq("user_id", user.id)
         .single();
@@ -185,7 +312,7 @@ export default function OrderDetail() {
     try {
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
+        .select("*, customization_details") // Add customization_details here too
         .eq("id", orderId)
         .eq("user_id", user.id)
         .single();
@@ -641,7 +768,6 @@ export default function OrderDetail() {
                               <h3 className="font-semibold text-sm sm:text-base text-gray-900">
                                 {itemName}
                               </h3>
-
                               <div className="flex flex-wrap justify-center sm:justify-start items-center gap-3 text-xs sm:text-sm text-gray-600">
                                 <span>Qty: {item.quantity || 1}</span>
                                 <span>•</span>
@@ -655,7 +781,6 @@ export default function OrderDetail() {
                                   </>
                                 )}
                               </div>
-
                               {/* Product specifications */}
                               {productDetails && (
                                 <div className="flex flex-wrap justify-center sm:justify-start items-center gap-3 text-xs text-gray-500">
@@ -678,52 +803,11 @@ export default function OrderDetail() {
                                 </div>
                               )}
 
-                              {/* Customization Details */}
-                              {item.customization &&
-                                Object.values(item.customization).some(
-                                  (v) => v
-                                ) && (
-                                  <div className="p-2 sm:p-3 bg-orange-50 rounded-lg border border-orange-200">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <Wrench className="h-3 w-3 sm:h-4 sm:w-4 text-orange-600" />
-                                      <span className="text-xs sm:text-sm font-medium text-orange-800">
-                                        Customization Details
-                                      </span>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                                      {item.customization.text && (
-                                        <div className="flex items-center gap-1">
-                                          <FileText className="h-3 w-3 text-orange-600" />
-                                          <span>
-                                            Text: {item.customization.text}
-                                          </span>
-                                        </div>
-                                      )}
-                                      {item.customization.color && (
-                                        <div className="flex items-center gap-1">
-                                          <Palette className="h-3 w-3 text-orange-600" />
-                                          <span>
-                                            Color: {item.customization.color}
-                                          </span>
-                                        </div>
-                                      )}
-                                      {item.customization.size && (
-                                        <div className="flex items-center gap-1">
-                                          <Ruler className="h-3 w-3 text-orange-600" />
-                                          <span>
-                                            Size: {item.customization.size}
-                                          </span>
-                                        </div>
-                                      )}
-                                      {item.customization.uploadedImage && (
-                                        <div className="flex items-center gap-1">
-                                          <ImageIcon className="h-3 w-3 text-orange-600" />
-                                          <span>Custom Image: Yes</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
+                              {/* Customization Details - FIXED */}
+                              {renderCustomizationDetails(
+                                item,
+                                order.customization_details
+                              )}
                             </div>
 
                             {/* Price */}

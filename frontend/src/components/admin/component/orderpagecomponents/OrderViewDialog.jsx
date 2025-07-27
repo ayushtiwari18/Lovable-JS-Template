@@ -3,6 +3,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { StatusBadge, PaymentMethodBadge } from "./OrderBadges";
 import { OrderDetailsCustomer } from "./OrderDetailsCustomer";
@@ -14,7 +15,10 @@ import { OrderDetailsNotes } from "./OrderDetailsNotes";
 
 export function OrderViewDialog({ open, onOpenChange, order }) {
   if (!order) return null;
-  console.log(order.customization_details, order.items);
+
+  // Enhanced debug log
+  console.log("Order customization_details:", order.customization_details);
+  console.log("Order items:", order.items);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -27,6 +31,7 @@ export function OrderViewDialog({ open, onOpenChange, order }) {
               <PaymentMethodBadge method={order.payment_method} />
             </div>
           </DialogTitle>
+          <DialogDescription>View and manage order details</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
@@ -39,9 +44,10 @@ export function OrderViewDialog({ open, onOpenChange, order }) {
             shippingInfo={order.shipping_info}
             customerName={order.customers?.name || "Unknown Customer"}
           />
-
           <OrderDetailsDelivery deliveryInfo={order.delivery_info} />
           <OrderDetailsNotes notes={order.order_notes} />
+
+          {/* Pass both items and customization_details */}
           <OrderDetailsItems
             items={order.items}
             customizationDetails={order.customization_details}
