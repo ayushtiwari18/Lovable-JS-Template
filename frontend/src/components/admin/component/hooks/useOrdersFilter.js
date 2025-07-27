@@ -1,57 +1,48 @@
-// hooks/useOrdersCombined.js
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
 import { ORDERS_PER_PAGE } from "../orderUtils/OrderUtils.js";
 
-/**
- * Hook to fetch, update, delete orders from Supabase.
- */
 export function useOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalOrders, setTotalOrders] = useState(0);
   const { toast } = useToast();
 
-  // Fetch orders from Supabase
   const fetchOrders = async (reset = true) => {
     try {
       setLoading(reset);
 
-      // Get total count first
       const { count, error: countError } = await supabase
         .from("orders")
         .select("*", { count: "exact", head: true });
-
       if (countError) throw countError;
       setTotalOrders(count || 0);
 
-      // Fetch initial orders
       const { data, error } = await supabase
         .from("orders")
         .select(
           `
-          *,
-          customers (
-            id,
-            user_id,
-            name,
-            email,
-            phone,
-            address,
-            bio,
-            created_at
-          )
-        `
+    *,
+    customization_details,
+    items,
+    customers (
+      id,
+      user_id,
+      name,
+      email,
+      phone,
+      address,
+      bio,
+      created_at
+    )
+  `
         )
         .order("created_at", { ascending: false })
-        .limit(ORDERS_PER_PAGE * 2); // Load first 2 pages worth
-
+        .limit(ORDERS_PER_PAGE * 2);
       if (error) throw error;
 
-      const fetchedOrders = data || [];
-      setOrders(fetchedOrders);
+      setOrders(data || []);
     } catch (err) {
       console.error("Fetch error:", err);
       toast({
@@ -64,17 +55,12 @@ export function useOrders() {
     }
   };
 
-  // Update order
   const updateOrder = async (orderId, updates) => {
     try {
       const { error } = await supabase
         .from("orders")
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ ...updates, updated_at: new Date().toISOString() })
         .eq("id", orderId);
-
       if (error) throw error;
 
       toast({
@@ -95,14 +81,12 @@ export function useOrders() {
     }
   };
 
-  // Delete order
   const deleteOrder = async (orderId) => {
     try {
       const { error } = await supabase
         .from("orders")
         .delete()
         .eq("id", orderId);
-
       if (error) throw error;
 
       toast({
@@ -137,20 +121,12 @@ export function useOrders() {
   };
 }
 
-/**
- * Function to apply filtering logic on orders by filter key.
- * Extend this based on your actual filter criteria.
- */
 function applyOrderFilter(orders, filterKey) {
   if (filterKey === "all" || !filterKey) return orders;
 
-  // Example filter logic based on order status
   return orders.filter((order) => order.status === filterKey);
 }
 
-/**
- * Hook to filter and paginate orders.
- */
 export function useOrdersFilter(orders) {
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [displayedOrders, setDisplayedOrders] = useState([]);
@@ -159,7 +135,6 @@ export function useOrdersFilter(orders) {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Apply filters and pagination
   const applyFilter = (filterKey) => {
     setActiveFilter(filterKey);
     setCurrentPage(1);
@@ -170,14 +145,12 @@ export function useOrdersFilter(orders) {
     setHasMore(filtered.length > ORDERS_PER_PAGE);
   };
 
-  // Load more orders for pagination
   const loadMoreOrders = () => {
     setLoadingMore(true);
     const nextPage = currentPage + 1;
     const startIndex = (nextPage - 1) * ORDERS_PER_PAGE;
     const endIndex = startIndex + ORDERS_PER_PAGE;
 
-    // Simulate async loading delay
     setTimeout(() => {
       const newOrders = filteredOrders.slice(startIndex, endIndex);
       setDisplayedOrders((prev) => [...prev, ...newOrders]);
@@ -187,10 +160,10 @@ export function useOrdersFilter(orders) {
     }, 500);
   };
 
-  // Re-apply filter when orders array or active filter changes
+  // Added activeFilter to dependencies to avoid stale closure
   useEffect(() => {
     applyFilter(activeFilter);
-  }, [orders]);
+  }, [orders, activeFilter]);
 
   return {
     filteredOrders,

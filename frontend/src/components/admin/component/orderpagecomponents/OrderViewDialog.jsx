@@ -14,6 +14,7 @@ import { OrderDetailsNotes } from "./OrderDetailsNotes";
 
 export function OrderViewDialog({ open, onOpenChange, order }) {
   if (!order) return null;
+  console.log(order.customization_details, order.items);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -30,7 +31,7 @@ export function OrderViewDialog({ open, onOpenChange, order }) {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           <OrderDetailsCustomer
-            customer={order.customer}
+            customer={order.customers}
             customerId={order.customer_id}
           />
           <OrderDetailsOrder order={order} />
@@ -41,7 +42,10 @@ export function OrderViewDialog({ open, onOpenChange, order }) {
 
           <OrderDetailsDelivery deliveryInfo={order.delivery_info} />
           <OrderDetailsNotes notes={order.order_notes} />
-          <OrderDetailsItems items={order.items} />
+          <OrderDetailsItems
+            items={order.items}
+            customizationDetails={order.customization_details}
+          />
         </div>
       </DialogContent>
     </Dialog>
