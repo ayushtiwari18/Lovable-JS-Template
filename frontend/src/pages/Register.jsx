@@ -1,3 +1,7 @@
+// Register.jsx (Modified: Redirect to personal-details after successful signup to fill additional details)
+
+
+// Register.jsx (Modified: Redirect to personal-details after successful signup to fill additional details)
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
@@ -19,6 +23,7 @@ const Register = () => {
     firstName: "",
     lastName: "",
     email: "",
+    phone: "", // New field: phone number
     password: "",
     confirmPassword: "",
   });
@@ -50,11 +55,10 @@ const Register = () => {
       options: {
         data: {
           name: `${formData.firstName} ${formData.lastName}`,
+          phone: formData.phone, // Store phone in user metadata
         },
       },
     });
-
-    setIsSubmitting(false);
 
     if (error) {
       toast({
@@ -62,15 +66,35 @@ const Register = () => {
         description: error.message,
         variant: "destructive",
       });
+      setIsSubmitting(false);
       return;
     }
 
-    toast({
-      title: "Account Created!",
-      description: "You're now signed in.",
+    // Insert phone into customers table (assuming table structure with user_id and phone)
+    const { error: insertError } = await supabase.from("customers").insert({
+      user_id: data.user.id,
+      phone: formData.phone,
     });
 
-    navigate("/");
+    if (insertError) {
+      console.error("Error inserting phone:", insertError);
+      toast({
+        title: "Phone Storage Failed",
+        description:
+          "Account created, but phone number could not be saved. Please update in profile.",
+        variant: "destructive",
+      });
+    }
+
+    setIsSubmitting(false);
+
+    toast({
+      title: "Account Created!",
+      description: "Please complete your personal details.",
+    });
+
+    // Redirect to personal details page to fill additional details
+    navigate("/personal-details");
   };
 
   return (
@@ -126,6 +150,20 @@ const Register = () => {
                   onChange={handleChange}
                   className="mt-1"
                   placeholder="Enter your email"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  required // Make it required if needed, or optional
+                  value={formData.phone}
+                  onChange={handleChange}
+                  className="mt-1"
+                  placeholder="Enter your phone number"
                 />
               </div>
 
@@ -210,5 +248,4 @@ const Register = () => {
     </Layout>
   );
 };
-
 export default Register;

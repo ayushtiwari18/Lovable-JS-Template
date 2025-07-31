@@ -10,7 +10,7 @@ const Index = () => {
   return (
     <Layout>
       <Hero />
-      <FeaturedCategories />
+      {/* <FeaturedCategories /> */}
       <FeaturedProducts />
       <HowItWorks />
       <HappyCustomers />
