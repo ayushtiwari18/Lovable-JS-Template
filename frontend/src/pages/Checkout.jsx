@@ -1,754 +1,181 @@
-import React, { useRef, useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useState } from "react";
 import { Layout } from "@/components/Layout";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { useCart } from "@/contexts/CartContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabaseClient";
+import CheckoutForm from "../components/CheckOut/CheckoutForm";
+import PaymentMethods from "../components/CheckOut/PaymentMethods";
+import OrderSummary from "../components/CheckOut/OrderSummary";
+import PaymentStatusHandler from "../components/CheckOut/PaymentStatusHandler";
+import LoadingState from "../components/CheckOut/LoadingState";
+import { useCheckoutLogic } from "../components/CheckOut/useCheckoutLogic";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 
-// At the top of your Checkout.jsx
 const PHONEPE_PAY_URL = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/pay`
   : "http://localhost:3000/pay";
 
 const Checkout = () => {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams(); // ✅ ADD THIS
-  const { items, getTotalPrice, clearCart, getCartForCheckout } = useCart();
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const payFormRef = useRef(null);
+  const {
+    loading,
+    processingPayment,
+    formData,
+    items,
+    searchParams,
+    payFormRef,
+    subtotal,
+    tax,
+    total,
+    handleChange,
+    handlePayNow,
+    handleCODPayment,
+    handlePaymentSuccess,
+    handlePaymentFailure,
+  } = useCheckoutLogic();
 
-  const [loading, setLoading] = useState(true);
-  const [processingPayment, setProcessingPayment] = useState(false);
-  
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
-    state: "",
-    zipCode: "",
+  // State for form validation
+  const [formValidation, setFormValidation] = useState({
+    isValid: false,
+    errors: {},
+    formData: {},
   });
 
-  // ✅ ADD: Check for payment success/failure on component mount
-  useEffect(() => {
-    const paymentStatus = searchParams.get('status');
-    const orderId = searchParams.get('orderId');
-    const transactionId = searchParams.get('transactionId');
+  // Handle validation changes from CheckoutForm
+  const handleValidationChange = (validationState) => {
+    setFormValidation(validationState);
 
-    if (paymentStatus && orderId) {
-      if (paymentStatus === 'success') {
-        console.log("🎉 Payment success detected, handling...");
-        handlePaymentSuccess(orderId, transactionId);
-      } else if (paymentStatus === 'failure') {
-        console.log("❌ Payment failure detected");
-        handlePaymentFailure(orderId, searchParams.get('message'));
-      }
-    }
-  }, [searchParams]);
-
-  // Add useEffect to redirect if cart becomes empty
-  useEffect(() => {
-    if (!loading && items.length === 0) {
-      console.log("Cart is empty, redirecting to cart page...");
-      navigate("/cart");
-      return;
-    }
-  }, [items.length, loading, navigate]);
-
-  useEffect(() => {
-    if (user) {
-      fetchUserProfile();
-    } else {
-      setLoading(false);
-    }
-  }, [user]);
-
-  const handleChange = (e) => {
-    setFormData((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
-  };
-
-  const fetchUserProfile = async () => {
-    try {
-      setLoading(true);
-      const { data: authUser } = await supabase.auth.getUser();
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
-
-      const address = customer?.address || {};
-      setFormData({
-        firstName: customer?.name?.split(" ")[0] || "",
-        lastName: customer?.name?.split(" ").slice(1).join(" ") || "",
-        email: authUser.user?.email || customer?.email || "",
-        phone: authUser.user?.phone || customer?.phone || "",
-        address: address.street || "",
-        city: address.city || "",
-        state: address.state || "",
-        zipCode: address.zipCode || "",
-      });
-    } catch (error) {
-      console.error("Profile fetch error:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load profile data",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const validateForm = () => {
-    const required = [
-      "firstName",
-      "lastName",
-      "email",
-      "phone",
-      "address",
-      "city",
-      "state",
-      "zipCode",
-    ];
-    for (const field of required) {
-      if (!formData[field].trim()) {
-        toast({
-          title: "Validation Error",
-          description: `Please fill in ${field
-            .replace(/([A-Z])/g, " $1")
-            .toLowerCase()}`,
-          variant: "destructive",
+    // Update the checkout logic with the validated form data
+    if (validationState.formData) {
+      // Sync the validated form data with your checkout logic
+      Object.keys(validationState.formData).forEach((key) => {
+        handleChange({
+          target: {
+            name: key,
+            value: validationState.formData[key],
+          },
         });
-        return false;
-      }
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      toast({
-        title: "Invalid Email",
-        description: "Please enter a valid email address",
-        variant: "destructive",
       });
-      return false;
     }
-    const phoneRegex = /^\d{10}$/;
-    if (!phoneRegex.test(formData.phone.replace(/\D/g, ""))) {
-      toast({
-        title: "Invalid Phone",
-        description: "Please enter a valid 10-digit phone number",
-        variant: "destructive",
-      });
-      return false;
-    }
-    return true;
   };
 
-  // ✅ FIXED: Create order with proper customization_details
-  const createCustomizationDetails = (cartItems) => {
-    const customizationDetails = {};
+  // Handle data loaded from database
+  const handleDataLoaded = (loadedData) => {
+    console.log("Customer data loaded in checkout:", loadedData);
 
-    cartItems.forEach((item) => {
-      if (item.customization && Object.keys(item.customization).length > 0) {
-        // Remove productId and productTitle from customization object for cleaner storage
-        const { productId, productTitle, ...actualCustomization } =
-          item.customization;
-
-        customizationDetails[item.productId || item.id] = {
-          productId: item.productId || item.id,
-          productTitle: item.name,
-          variantId: item.variantId || null,
-          customizations: actualCustomization,
-          timestamp: new Date().toISOString(),
-        };
+    // Update checkout logic with loaded data
+    Object.keys(loadedData).forEach((key) => {
+      if (key !== "isValid") {
+        // Skip validation flag
+        handleChange({
+          target: {
+            name: key,
+            value: loadedData[key],
+          },
+        });
       }
     });
-
-    return customizationDetails;
   };
 
-  const createOrder = async (paymentMethod = "PayNow") => {
-    try {
-      console.log("=== CREATING ORDER ===");
-      console.log("User ID:", user.id);
-
-      // Get the current authenticated user
-      const {
-        data: { user: authUser },
-        error: authError,
-      } = await supabase.auth.getUser();
-
-      if (authError || !authUser) {
-        throw new Error("Authentication failed");
-      }
-
-      // Get or create customer record
-      let customer;
-      const { data: existingCustomer, error: customerFetchError } =
-        await supabase
-          .from("customers")
-          .select("id")
-          .eq("user_id", authUser.id)
-          .single();
-
-      if (customerFetchError && customerFetchError.code !== "PGRST116") {
-        throw new Error(
-          "Failed to fetch customer: " + customerFetchError.message
-        );
-      }
-
-      if (existingCustomer) {
-        customer = existingCustomer;
-      } else {
-        // Create customer if doesn't exist
-        const { data: newCustomer, error: customerCreateError } = await supabase
-          .from("customers")
-          .insert({
-            user_id: authUser.id,
-            name: `${formData.firstName} ${formData.lastName}`,
-            email: formData.email,
-            phone: formData.phone,
-          })
-          .select("id")
-          .single();
-
-        if (customerCreateError) {
-          throw new Error(
-            "Failed to create customer: " + customerCreateError.message
-          );
-        }
-        customer = newCustomer;
-      }
-
-      const subtotal = getTotalPrice();
-      const tax = subtotal * 0.08;
-      const total = subtotal + tax;
-      const totalPaise = Math.round(total * 100);
-
-      // ✅ FIXED: Get cart items with proper structure
-      const cartItems = getCartForCheckout();
-      const customizationDetails = createCustomizationDetails(cartItems);
-
-      console.log("Cart items for order:", cartItems);
-      console.log("Customization details:", customizationDetails);
-
-      const orderData = {
-        user_id: authUser.id,
-        customer_id: customer.id,
-        items: cartItems.map((item) => ({
-          id: item.id,
-          productId: item.productId,
-          variantId: item.variantId,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          image: item.image || "",
-          variant: item.variant,
-          customization: item.customization || {},
-        })),
-        shipping_info: {
-          firstName: formData.firstName || "",
-          lastName: formData.lastName || "",
-          phone: formData.phone || "",
-          address: formData.address || "",
-          city: formData.city || "",
-          state: formData.state || "",
-          zipCode: formData.zipCode || "",
-        },
-        delivery_info: {
-          method: "standard",
-          estimatedDays: "3-5",
-        },
-        total_price: totalPaise,
-        amount: total,
-        status: "pending",
-        payment_status: "pending",
-        payment_method: paymentMethod || "PayNow",
-        upi_reference: null,
-        transaction_id: null,
-        order_notes: null,
-        // ✅ FIXED: Add customization details
-        customization_details: customizationDetails,
-        requires_customization: Object.keys(customizationDetails).length > 0,
-      };
-
-      console.log("📦 Creating order with data:", orderData);
-
-      const { data, error } = await supabase
-        .from("orders")
-        .insert([orderData])
-        .select("*")
-        .single();
-
-      if (error) {
-        console.error("💥 INSERT ERROR:", error);
-        throw new Error(`Database error: ${error.message}`);
-      }
-
-      console.log("✅ Order created successfully:", data);
-      return data;
-    } catch (error) {
-      console.error("🚨 CREATE ORDER FAILED:", error);
-      throw error;
+  // Enhanced payment handlers that check validation
+  const handleValidatedPayNow = () => {
+    if (!formValidation.isValid) {
+      return; // Payment button should be disabled anyway
     }
+    handlePayNow();
   };
 
-  // PayNow Handler - DON'T clear cart until payment succeeds
-  const handlePayNow = async () => {
-    if (!validateForm()) return;
-    setProcessingPayment(true);
-
-    try {
-      // Store cart data before potential clearing
-      const cartItemsForPhonePe = items.map((item) => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        image: item.image,
-        customization: item.customization || {},
-      }));
-
-      // Create order in database first
-      const order = await createOrder("PayNow");
-
-      // 🚨 DON'T CLEAR CART HERE!
-      // Cart will be cleared by payment success webhook/callback
-      console.log("📦 Keeping cart until payment confirmation...");
-
-      const totalAmount = Math.round(getTotalPrice() * 1.08 * 100);
-
-      // Set form values for PhonePe
-      document.getElementById("pp-order-id").value = order.id;
-      document.getElementById("pp-amount").value = totalAmount;
-      document.getElementById("pp-customer-email").value = formData.email;
-      document.getElementById("pp-customer-phone").value = formData.phone;
-      document.getElementById(
-        "pp-customer-name"
-      ).value = `${formData.firstName} ${formData.lastName}`;
-      document.getElementById("pp-cart-items").value =
-        JSON.stringify(cartItemsForPhonePe);
-      document.getElementById("pp-shipping-info").value = JSON.stringify({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-        address: formData.address,
-        city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
-      });
-
-      // Submit to PhonePe
-      payFormRef.current.submit();
-    } catch (error) {
-      console.error("PayNow failed:", error);
-      toast({
-        title: "Payment Error",
-        description: error.message,
-        variant: "destructive",
-      });
-      setProcessingPayment(false);
+  const handleValidatedCODPayment = () => {
+    if (!formValidation.isValid) {
+      return; // COD button should be disabled anyway
     }
+    handleCODPayment();
   };
 
-  // ✅ USED: Payment success handler
-  const handlePaymentSuccess = async (orderId, transactionId = null) => {
-    try {
-      console.log("🎉 Processing payment success for order:", orderId);
-      setProcessingPayment(true);
-
-      // Verify payment with your backend first
-      const { data: order, error: fetchError } = await supabase
-        .from("orders")
-        .select("payment_status, status, id")
-        .eq("id", orderId)
-        .single();
-
-      if (fetchError) {
-        throw new Error("Failed to fetch order details");
-      }
-
-      console.log("📋 Order status:", order);
-
-      if (order.payment_status === "completed" || order.payment_status === "success") {
-        // NOW clear the cart
-        console.log("🧹 Clearing cart after successful payment...");
-        await clearCart();
-        console.log("✅ Cart cleared successfully");
-
-        // Update order status if needed
-        if (transactionId) {
-          await supabase
-            .from("orders")
-            .update({ transaction_id: transactionId })
-            .eq("id", orderId);
-        }
-
-        toast({
-          title: "Payment Successful! 🎉",
-          description: "Your order has been confirmed. Redirecting...",
-          duration: 3000,
-        });
-
-        // Clear URL parameters and redirect
-        setTimeout(() => {
-          navigate(`/order/${orderId}`, { replace: true });
-        }, 2000);
-      } else {
-        // Payment verification failed
-        toast({
-          title: "Payment Verification Failed",
-          description: "Please contact support if money was deducted.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("❌ Payment verification failed:", error);
-      toast({
-        title: "Payment Verification Failed",
-        description: error.message || "Please contact support.",
-        variant: "destructive",
-      });
-    } finally {
-      setProcessingPayment(false);
-    }
-  };
-
-  // ✅ ADD: Payment failure handler
-  const handlePaymentFailure = async (orderId, message = null) => {
-    try {
-      console.log("❌ Processing payment failure for order:", orderId);
-      
-      // Update order status to failed
-      await supabase
-        .from("orders")
-        .update({ 
-          payment_status: "failed",
-          status: "cancelled",
-          order_notes: message || "Payment failed"
-        })
-        .eq("id", orderId);
-
-      toast({
-        title: "Payment Failed",
-        description: message || "Your payment was not processed. Please try again.",
-        variant: "destructive",
-      });
-
-      // Don't clear cart on failure - user can retry
-      console.log("🛒 Keeping cart for retry");
-      
-      setProcessingPayment(false);
-    } catch (error) {
-      console.error("Error handling payment failure:", error);
-      setProcessingPayment(false);
-    }
-  };
-
-  // COD Handler - This is fine as is
-  const handleCODPayment = async () => {
-    if (!validateForm()) return;
-    setProcessingPayment(true);
-
-    try {
-      const order = await createOrder("COD");
-
-      // ✅ Clear cart for COD since order creation = success
-      console.log("🧹 Clearing cart after successful COD order...");
-      await clearCart();
-      console.log("✅ Cart cleared successfully");
-
-      toast({
-        title: "Order Placed Successfully!",
-        description: `Order #${order.id.slice(
-          0,
-          8
-        )} has been placed. You'll pay on delivery.`,
-      });
-
-      navigate(`/order/${order.id}`);
-    } catch (error) {
-      console.error("COD Payment error:", error);
-      toast({
-        title: "Order Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setProcessingPayment(false);
-    }
-  };
-
-  // Early return if cart is empty
+  // Early returns for different states
   if (items.length === 0 && !loading) {
-    return null; // Will be redirected by useEffect
+    return (
+      <Layout>
+        <div className="py-12">
+          <div className="container mx-auto px-4 text-center">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">
+              Your Cart is Empty
+            </h1>
+            <p className="text-gray-600 mb-8">
+              Add some items to your cart before checking out.
+            </p>
+            <a
+              href="/products"
+              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary hover:bg-primary/90"
+            >
+              Continue Shopping
+            </a>
+          </div>
+        </div>
+      </Layout>
+    );
   }
 
   if (loading) {
-    return (
-      <Layout>
-        <div className="py-12">
-          <div className="container mx-auto px-4">
-            <div className="text-center">
-              <h1 className="text-2xl font-semibold">Loading checkout...</h1>
-            </div>
-          </div>
-        </div>
-      </Layout>
-    );
+    return <LoadingState type="loading" />;
   }
 
-  // ✅ ADD: Show processing state during payment verification
-  if (processingPayment && (searchParams.get('status') === 'success' || searchParams.get('status') === 'failure')) {
-    return (
-      <Layout>
-        <div className="py-12">
-          <div className="container mx-auto px-4">
-            <div className="text-center">
-              <h1 className="text-2xl font-semibold mb-4">
-                {searchParams.get('status') === 'success' ? 'Processing Payment...' : 'Payment Failed'}
-              </h1>
-              <p className="text-gray-600">
-                {searchParams.get('status') === 'success' 
-                  ? 'Please wait while we confirm your payment.'
-                  : 'Your payment could not be processed.'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </Layout>
-    );
+  if (processingPayment && searchParams.get("status")) {
+    const status =
+      searchParams.get("status") === "success" ? "processing" : "failed";
+    return <LoadingState type={status} />;
   }
-
-  const subtotal = getTotalPrice();
-  const tax = subtotal * 0.08;
-  const total = subtotal + tax;
 
   return (
     <Layout>
-      {/* Your existing JSX remains exactly the same */}
+      <PaymentStatusHandler
+        onPaymentSuccess={handlePaymentSuccess}
+        onPaymentFailure={handlePaymentFailure}
+      />
+
       <div className="py-12">
         <div className="container mx-auto px-4">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
+
+          {/* Form validation warning */}
+          {!formValidation.isValid &&
+            Object.keys(formValidation.errors).length > 0 && (
+              <Alert className="mb-6 border-yellow-200 bg-yellow-50">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-yellow-700">
+                  Please complete all required fields before proceeding with
+                  payment.
+                </AlertDescription>
+              </Alert>
+            )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Your existing form and order summary JSX */}
+            {/* Left Column */}
             <div className="space-y-8">
-              <div className="bg-white rounded-lg shadow-sm border p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Contact Information
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="firstName">First Name *</Label>
-                    <Input
-                      id="firstName"
-                      name="firstName"
-                      required
-                      value={formData.firstName}
-                      onChange={handleChange}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">Last Name *</Label>
-                    <Input
-                      id="lastName"
-                      name="lastName"
-                      required
-                      value={formData.lastName}
-                      onChange={handleChange}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      required
-                      value={formData.email}
-                      onChange={handleChange}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="phone">Phone *</Label>
-                    <Input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      required
-                      value={formData.phone}
-                      onChange={handleChange}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-              </div>
+              <CheckoutForm
+                onDataLoaded={handleDataLoaded}
+                onValidationChange={handleValidationChange}
+              />
 
-              {/* Shipping Address */}
-              <div className="bg-white rounded-lg shadow-sm border p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Shipping Address
-                </h2>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="address">Address *</Label>
-                    <Input
-                      id="address"
-                      name="address"
-                      required
-                      value={formData.address}
-                      onChange={handleChange}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="city">City *</Label>
-                      <Input
-                        id="city"
-                        name="city"
-                        required
-                        value={formData.city}
-                        onChange={handleChange}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="state">State *</Label>
-                      <Input
-                        id="state"
-                        name="state"
-                        required
-                        value={formData.state}
-                        onChange={handleChange}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="zipCode">ZIP Code *</Label>
-                      <Input
-                        id="zipCode"
-                        name="zipCode"
-                        required
-                        value={formData.zipCode}
-                        onChange={handleChange}
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment Methods */}
-              <div className="bg-white rounded-lg shadow-sm border p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Payment Method
-                </h2>
-                <div className="space-y-3">
-                  <Button
-                    onClick={handlePayNow}
-                    disabled={processingPayment}
-                    className="w-full h-12 text-lg"
-                    size="lg"
-                  >
-                    {processingPayment
-                      ? "Processing..."
-                      : `Pay Now - ₹${total.toFixed(2)}`}
-                  </Button>
-                  <div className="text-center text-gray-500">or</div>
-                  <Button
-                    onClick={handleCODPayment}
-                    disabled={processingPayment}
-                    variant="outline"
-                    className="w-full h-12 text-lg"
-                    size="lg"
-                  >
-                    {processingPayment ? "Processing..." : "Cash on Delivery"}
-                  </Button>
-                </div>
-                <p className="text-xs text-gray-500 mt-4 text-center">
-                  Pay Now: Secure online payment via PhonePe
-                  <br />
-                  COD: Pay when your order is delivered
-                </p>
-              </div>
+              <PaymentMethods
+                onPayNow={handleValidatedPayNow}
+                onCODPayment={handleValidatedCODPayment}
+                isProcessing={processingPayment}
+                total={total}
+                isFormValid={formValidation.isValid}
+                validationErrors={formValidation.errors}
+              />
             </div>
 
-            {/* Order Summary */}
-            <div className="bg-gray-50 rounded-lg p-6 h-fit">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Order Summary
-              </h2>
-              <div className="space-y-3 mb-6">
-                {items.map((item) => (
-                  <div
-                    key={`${item.id}-${JSON.stringify(item.customization)}`}
-                    className="flex justify-between items-center"
-                  >
-                    <div className="flex items-center">
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-12 h-12 object-cover rounded-lg mr-3"
-                        onError={(e) => {
-                          e.target.src = "/placeholder-image.jpg";
-                        }}
-                      />
-                      <div>
-                        <p className="font-medium text-sm">{item.name}</p>
-                        <p className="text-xs text-gray-600">
-                          Qty: {item.quantity}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="font-medium">
-                      ₹{(item.price * item.quantity).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-2 mb-6 pb-6 border-b">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">₹{subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Shipping</span>
-                  <span className="font-medium">Free</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Tax</span>
-                  <span className="font-medium">₹{tax.toFixed(2)}</span>
-                </div>
-              </div>
-              <div className="flex justify-between mb-4">
-                <span className="text-lg font-semibold">Total</span>
-                <span className="text-lg font-bold text-primary">
-                  ₹{total.toFixed(2)}
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 text-center">
-                Choose your preferred payment method above
-              </p>
-            </div>
+            {/* Right Column */}
+            <OrderSummary
+              items={items}
+              subtotal={subtotal}
+              tax={tax}
+              total={total}
+            />
           </div>
         </div>
       </div>
 
-      {/* HIDDEN FORM for PhonePe payment */}
+      {/* Hidden PhonePe Form */}
       <form
         ref={payFormRef}
         id="phonepe-pay-form"
